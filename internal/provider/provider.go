@@ -34,10 +34,7 @@ func (p *CraneProvider) Metadata(ctx context.Context, req provider.MetadataReque
 func (p *CraneProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
-			//"endpoint": schema.StringAttribute{
-			//	MarkdownDescription: "Example provider attribute",
-			//	Optional:            true,
-			//},
+			// TODO: Add provider configuration attributes here.
 		},
 	}
 }
@@ -51,10 +48,6 @@ func (p *CraneProvider) Configure(ctx context.Context, req provider.ConfigureReq
 		return
 	}
 
-	// Configuration values are now available.
-	// if data.Endpoint.IsNull() { /* ... */ }
-
-	// Example client configuration for data sources and resources
 	client := http.DefaultClient
 	resp.DataSourceData = client
 	resp.ResourceData = client
