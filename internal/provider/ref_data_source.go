@@ -3,7 +3,6 @@ package provider
 import (
 	"context"
 	"fmt"
-	"net/http"
 
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
@@ -22,12 +21,10 @@ func NewRefDataSource() datasource.DataSource {
 }
 
 // RefDataSource defines the data source implementation.
-type RefDataSource struct {
-	client *http.Client
-}
+type RefDataSource struct{}
 
-// ExampleDataSourceModel describes the data source data model.
-type ExampleDataSourceModel struct {
+// RefDataSourceModel describes the data source data model.
+type RefDataSourceModel struct {
 	Ref    types.String `tfsdk:"ref"`
 	Id     types.String `tfsdk:"id"`
 	Digest types.String `tfsdk:"digest"`
@@ -55,6 +52,11 @@ func (d *RefDataSource) Schema(ctx context.Context, req datasource.SchemaRequest
 				MarkdownDescription: "Image digest of the image.",
 				Computed:            true,
 			},
+
+			// TODO:
+			// - output attribute for digests by platform (for indexes)
+			// - output attribute for layers and config (for images)
+			// - output attribute for manifest information (annotations, etc)
 		},
 	}
 }
@@ -64,23 +66,10 @@ func (d *RefDataSource) Configure(ctx context.Context, req datasource.ConfigureR
 	if req.ProviderData == nil {
 		return
 	}
-
-	client, ok := req.ProviderData.(*http.Client)
-
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected *http.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
-		)
-
-		return
-	}
-
-	d.client = client
 }
 
 func (d *RefDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
-	var data ExampleDataSourceModel
+	var data RefDataSourceModel
 
 	// Read Terraform configuration data into the model
 	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
@@ -94,7 +83,10 @@ func (d *RefDataSource) Read(ctx context.Context, req datasource.ReadRequest, re
 		resp.Diagnostics.AddError("Invalid ref", fmt.Sprintf("Unable to parse ref %s, got error: %s", data.Ref.ValueString(), err))
 		return
 	}
-	desc, err := remote.Get(ref, remote.WithAuthFromKeychain(authn.DefaultKeychain))
+	desc, err := remote.Get(ref,
+		remote.WithContext(ctx),
+		remote.WithAuthFromKeychain(authn.DefaultKeychain),
+	)
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to read ref", fmt.Sprintf("Unable to read ref %s, got error: %s", data.Ref.String(), err))
 		return

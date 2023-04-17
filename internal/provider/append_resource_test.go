@@ -3,6 +3,7 @@ package provider
 import (
 	"fmt"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -56,10 +57,15 @@ func TestAccExampleResource(t *testing.T) {
 			{
 				Config: fmt.Sprintf(`resource "oci_append" "test" {
 				  base_image = %q
+				  layers = [{
+					files = {
+					  "test.txt" = { contents = "hello world" }
+					}
+				  }]
 				}`, ref1),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("oci_append.test", "base_image", ref1.String()),
-					resource.TestCheckResourceAttr("oci_append.test", "id", "TODO"),
+					resource.TestMatchResourceAttr("oci_append.test", "id", regexp.MustCompile(`/test@sha256:[0-9a-f]{64}$`)),
 				),
 			},
 			// ImportState testing
@@ -71,12 +77,18 @@ func TestAccExampleResource(t *testing.T) {
 				// example code does not have an actual upstream service.
 				// Once the Read method is able to refresh information from
 				// the upstream service, this can be removed.
-				ImportStateVerifyIgnore: []string{"base_image"},
+				ImportStateVerifyIgnore: []string{"base_image", "layers"},
 			},
 			// Update and Read testing
 			{
 				Config: fmt.Sprintf(`resource "oci_append" "test" {
 					base_image = %q
+					layers = [{
+					  files = {
+						"/usr/local/test.txt" = { contents = "hello world" }
+						"/usr/bin/test.sh"  = { contents = "echo hello world" }
+					  }
+					}]
 				  }`, ref2),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("oci_append.test", "base_image", ref2.String()),
