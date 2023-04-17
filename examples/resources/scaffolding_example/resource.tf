@@ -1,3 +1,3 @@
-resource "scaffolding_example" "example" {
-  configurable_attribute = "some-value"
+resource "crane_append" "example" {
+  base_image = "alpine:3.18"
 }

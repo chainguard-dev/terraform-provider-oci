@@ -1,3 +1,3 @@
-data "scaffolding_example" "example" {
-  configurable_attribute = "some-value"
+data "crane_ref" "example" {
+  ref = "registry.example.com/repo/image:tag"
 }

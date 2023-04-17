@@ -1,3 +1,3 @@
-provider "scaffolding" {
+provider "crane" {
   # example configuration here
 }

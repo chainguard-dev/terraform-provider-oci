@@ -15,7 +15,8 @@ func TestAccExampleDataSource(t *testing.T) {
 			{
 				Config: testAccExampleDataSourceConfig,
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("data.scaffolding_example.test", "id", "example-id"),
+					resource.TestCheckResourceAttr("data.crane_ref.test", "id", "alpine@sha256:124c7d2707904eea7431fffe91522a01e5a861a624ee31d03372cc1d138a3126"),
+					resource.TestCheckResourceAttr("data.crane_ref.test", "digest", "sha256:124c7d2707904eea7431fffe91522a01e5a861a624ee31d03372cc1d138a3126"),
 				),
 			},
 		},
@@ -23,7 +24,7 @@ func TestAccExampleDataSource(t *testing.T) {
 }
 
 const testAccExampleDataSourceConfig = `
-data "scaffolding_example" "test" {
-  configurable_attribute = "example"
+data "crane_ref" "test" {
+  ref = "alpine@sha256:124c7d2707904eea7431fffe91522a01e5a861a624ee31d03372cc1d138a3126"
 }
 `
