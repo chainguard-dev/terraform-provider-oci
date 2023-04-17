@@ -8,7 +8,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
-	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
 var _ provider.Provider = &CraneProvider{}
@@ -23,7 +22,7 @@ type CraneProvider struct {
 
 // CraneProviderModel describes the provider data model.
 type CraneProviderModel struct {
-	Endpoint types.String `tfsdk:"endpoint"`
+	// TODO: Add provider configuration attributes here.
 }
 
 func (p *CraneProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {

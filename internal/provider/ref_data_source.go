@@ -89,9 +89,9 @@ func (d *RefDataSource) Read(ctx context.Context, req datasource.ReadRequest, re
 		return
 	}
 
-	ref, err := name.ParseReference(data.Ref.String())
+	ref, err := name.ParseReference(data.Ref.ValueString())
 	if err != nil {
-		resp.Diagnostics.AddError("Invalid ref", fmt.Sprintf("Unable to parse ref %s, got error: %s", data.Ref.String(), err))
+		resp.Diagnostics.AddError("Invalid ref", fmt.Sprintf("Unable to parse ref %s, got error: %s", data.Ref.ValueString(), err))
 		return
 	}
 	desc, err := remote.Get(ref, remote.WithAuthFromKeychain(authn.DefaultKeychain))
