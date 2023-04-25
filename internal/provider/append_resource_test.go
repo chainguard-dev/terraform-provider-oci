@@ -5,23 +5,19 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/google/go-containerregistry/pkg/name"
+	ocitesting "github.com/chainguard-dev/terraform-provider-oci/testing"
 	"github.com/google/go-containerregistry/pkg/v1/random"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
-func TestAccExampleResource(t *testing.T) {
-	reg, cleanup := setupRegistry(t)
+func TestAccAppendResource(t *testing.T) {
+	repo, cleanup := ocitesting.SetupRepository(t, "test")
 	defer cleanup()
 
-	ref1, err := name.ParseReference(reg + "/test:1")
-	if err != nil {
-		t.Fatalf("failed to parse reference: %v", err)
-	}
-	t.Logf("Using ref1: %s", ref1)
-
 	// Push an image to the local registry.
+	ref1 := repo.Tag("1")
+	t.Logf("Using ref1: %s", ref1)
 	img1, err := random.Image(1024, 1)
 	if err != nil {
 		t.Fatalf("failed to create image: %v", err)
@@ -30,13 +26,9 @@ func TestAccExampleResource(t *testing.T) {
 		t.Fatalf("failed to write image: %v", err)
 	}
 
-	ref2, err := name.ParseReference(reg + "/test:2")
-	if err != nil {
-		t.Fatalf("failed to parse reference: %v", err)
-	}
-	t.Logf("Using ref2: %s", ref2)
-
 	// Push an image to the local registry.
+	ref2 := repo.Tag("2")
+	t.Logf("Using ref2: %s", ref2)
 	img2, err := random.Image(1024, 1)
 	if err != nil {
 		t.Fatalf("failed to create image: %v", err)
@@ -61,6 +53,7 @@ func TestAccExampleResource(t *testing.T) {
 				}`, ref1),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("oci_append.test", "base_image", ref1.String()),
+					resource.TestMatchResourceAttr("oci_append.test", "image_ref", regexp.MustCompile(`/test@sha256:[0-9a-f]{64}$`)),
 					resource.TestMatchResourceAttr("oci_append.test", "id", regexp.MustCompile(`/test@sha256:[0-9a-f]{64}$`)),
 				),
 			},
