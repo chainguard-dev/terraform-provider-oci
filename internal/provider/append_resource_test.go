@@ -54,17 +54,17 @@ func TestAccExampleResource(t *testing.T) {
 		Steps: []resource.TestStep{
 			// Create and Read testing
 			{
-				Config: fmt.Sprintf(`resource "crane_append" "test" {
+				Config: fmt.Sprintf(`resource "oci_append" "test" {
 				  base_image = %q
 				}`, ref1),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("crane_append.test", "base_image", ref1.String()),
-					resource.TestCheckResourceAttr("crane_append.test", "id", "TODO"),
+					resource.TestCheckResourceAttr("oci_append.test", "base_image", ref1.String()),
+					resource.TestCheckResourceAttr("oci_append.test", "id", "TODO"),
 				),
 			},
 			// ImportState testing
 			{
-				ResourceName:      "crane_append.test",
+				ResourceName:      "oci_append.test",
 				ImportState:       true,
 				ImportStateVerify: true,
 				// This is not normally necessary, but is here because this
@@ -75,11 +75,11 @@ func TestAccExampleResource(t *testing.T) {
 			},
 			// Update and Read testing
 			{
-				Config: fmt.Sprintf(`resource "crane_append" "test" {
+				Config: fmt.Sprintf(`resource "oci_append" "test" {
 					base_image = %q
 				  }`, ref2),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("crane_append.test", "base_image", ref2.String()),
+					resource.TestCheckResourceAttr("oci_append.test", "base_image", ref2.String()),
 				),
 			},
 			// Delete testing automatically occurs in TestCase

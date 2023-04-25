@@ -1,3 +1,3 @@
-provider "crane" {
+provider "oci" {
   # example configuration here
 }

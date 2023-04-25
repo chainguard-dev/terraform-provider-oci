@@ -43,12 +43,12 @@ func TestAccExampleDataSource(t *testing.T) {
 		Steps: []resource.TestStep{
 			// Read testing
 			{
-				Config: fmt.Sprintf(`data "crane_ref" "test" {
+				Config: fmt.Sprintf(`data "oci_ref" "test" {
 				  ref = %q
 				}`, ref),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("data.crane_ref.test", "id", ref.Context().Digest(d.String()).String()),
-					resource.TestCheckResourceAttr("data.crane_ref.test", "digest", d.String()),
+					resource.TestCheckResourceAttr("data.oci_ref.test", "id", ref.Context().Digest(d.String()).String()),
+					resource.TestCheckResourceAttr("data.oci_ref.test", "digest", d.String()),
 				),
 			},
 		},

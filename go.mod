@@ -1,4 +1,4 @@
-module github.com/imjasonh/terraform-provider-crane
+module github.com/chainguard-dev/terraform-provider-oci
 
 go 1.19
 

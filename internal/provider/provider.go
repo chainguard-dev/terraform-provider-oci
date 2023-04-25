@@ -10,27 +10,27 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 )
 
-var _ provider.Provider = &CraneProvider{}
+var _ provider.Provider = &OCIProvider{}
 
-// CraneProvider defines the provider implementation.
-type CraneProvider struct {
+// OCIProvider defines the provider implementation.
+type OCIProvider struct {
 	// version is set to the provider version on release, "dev" when the
 	// provider is built and ran locally, and "test" when running acceptance
 	// testing.
 	version string
 }
 
-// CraneProviderModel describes the provider data model.
-type CraneProviderModel struct {
+// OCIProviderModel describes the provider data model.
+type OCIProviderModel struct {
 	// TODO: Add provider configuration attributes here.
 }
 
-func (p *CraneProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
-	resp.TypeName = "crane"
+func (p *OCIProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
+	resp.TypeName = "oci"
 	resp.Version = p.version
 }
 
-func (p *CraneProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
+func (p *OCIProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
 			// TODO: Add provider configuration attributes here.
@@ -38,11 +38,9 @@ func (p *CraneProvider) Schema(ctx context.Context, req provider.SchemaRequest, 
 	}
 }
 
-func (p *CraneProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
-	var data CraneProviderModel
-
+func (p *OCIProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
+	var data OCIProviderModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
-
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -52,13 +50,13 @@ func (p *CraneProvider) Configure(ctx context.Context, req provider.ConfigureReq
 	resp.ResourceData = client
 }
 
-func (p *CraneProvider) Resources(ctx context.Context) []func() resource.Resource {
+func (p *OCIProvider) Resources(ctx context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		NewAppendResource,
 	}
 }
 
-func (p *CraneProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
+func (p *OCIProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
 		NewRefDataSource,
 	}
@@ -66,7 +64,7 @@ func (p *CraneProvider) DataSources(ctx context.Context) []func() datasource.Dat
 
 func New(version string) func() provider.Provider {
 	return func() provider.Provider {
-		return &CraneProvider{
+		return &OCIProvider{
 			version: version,
 		}
 	}
