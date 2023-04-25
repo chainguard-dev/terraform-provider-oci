@@ -2,24 +2,20 @@ package provider
 
 import (
 	"fmt"
-	"net/http/httptest"
 	"regexp"
-	"strings"
 	"testing"
 
 	"github.com/google/go-containerregistry/pkg/name"
-	"github.com/google/go-containerregistry/pkg/registry"
 	"github.com/google/go-containerregistry/pkg/v1/random"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
 func TestAccExampleResource(t *testing.T) {
-	// Setup a local registry and have tests push to that.
-	srv := httptest.NewServer(registry.New())
-	defer srv.Close()
+	reg, cleanup := setupRegistry(t)
+	defer cleanup()
 
-	ref1, err := name.ParseReference(strings.TrimPrefix(srv.URL, "http://") + "/test:1")
+	ref1, err := name.ParseReference(reg + "/test:1")
 	if err != nil {
 		t.Fatalf("failed to parse reference: %v", err)
 	}
@@ -34,7 +30,7 @@ func TestAccExampleResource(t *testing.T) {
 		t.Fatalf("failed to write image: %v", err)
 	}
 
-	ref2, err := name.ParseReference(strings.TrimPrefix(srv.URL, "http://") + "/test:2")
+	ref2, err := name.ParseReference(reg + "/test:2")
 	if err != nil {
 		t.Fatalf("failed to parse reference: %v", err)
 	}
@@ -59,7 +55,7 @@ func TestAccExampleResource(t *testing.T) {
 				  base_image = %q
 				  layers = [{
 					files = {
-					  "test.txt" = { contents = "hello world" }
+					  "/usr/local/test.txt" = { contents = "hello world" }
 					}
 				  }]
 				}`, ref1),
@@ -86,12 +82,13 @@ func TestAccExampleResource(t *testing.T) {
 					layers = [{
 					  files = {
 						"/usr/local/test.txt" = { contents = "hello world" }
-						"/usr/bin/test.sh"  = { contents = "echo hello world" }
+						"/usr/bin/test.sh"    = { contents = "echo hello world" }
 					  }
 					}]
 				  }`, ref2),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("oci_append.test", "base_image", ref2.String()),
+					resource.TestMatchResourceAttr("oci_append.test", "id", regexp.MustCompile(`/test@sha256:[0-9a-f]{64}$`)),
 				),
 			},
 			// Delete testing automatically occurs in TestCase

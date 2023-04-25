@@ -127,20 +127,19 @@ func (r *AppendResource) Create(ctx context.Context, req resource.CreateRequest,
 func doAppend(ctx context.Context, data *AppendResourceModel) (string, diag.Diagnostics) {
 	baseref, err := name.ParseReference(data.BaseImage.ValueString())
 	if err != nil {
-		return "", []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to parse base image", fmt.Sprintf("Unable to parse base image %s, got error: %s", data.BaseImage.ValueString(), err))}
+		return "", []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to parse base image", fmt.Sprintf("Unable to parse base image %q, got error: %s", data.BaseImage.ValueString(), err))}
 	}
 	img, err := remote.Image(baseref,
 		remote.WithContext(ctx),
 		remote.WithAuthFromKeychain(authn.DefaultKeychain),
 	)
 	if err != nil {
-		return "", []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to fetch base image", fmt.Sprintf("Unable to fetch base image %s, got error: %s", data.BaseImage.ValueString(), err))}
+		return "", []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to fetch base image", fmt.Sprintf("Unable to fetch base image %q, got error: %s", data.BaseImage.ValueString(), err))}
 	}
 
 	var ls []struct {
 		Files map[string]struct {
 			Contents types.String `tfsdk:"contents"`
-			Mode     types.String `tfsdk:"mode"`
 		} `tfsdk:"files"`
 	}
 	if diag := data.Layers.ElementsAs(ctx, &ls, false); diag.HasError() {
@@ -154,13 +153,12 @@ func doAppend(ctx context.Context, data *AppendResourceModel) (string, diag.Diag
 		for name, f := range l.Files {
 			if err := tw.WriteHeader(&tar.Header{
 				Name: name,
-				//	Mode: f.Mode.ValueString(),
 				Size: int64(len(f.Contents.ValueString())),
 			}); err != nil {
-				return "", []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to write tar header", fmt.Sprintf("Unable to write tar header for %s, got error: %s", name, err))}
+				return "", []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to write tar header", fmt.Sprintf("Unable to write tar header for %q, got error: %s", name, err))}
 			}
 			if _, err := tw.Write([]byte(f.Contents.ValueString())); err != nil {
-				return "", []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to write tar contents", fmt.Sprintf("Unable to write tar contents for %s, got error: %s", name, err))}
+				return "", []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to write tar contents", fmt.Sprintf("Unable to write tar contents for %q, got error: %s", name, err))}
 			}
 		}
 		if err := tw.Close(); err != nil {
@@ -200,9 +198,19 @@ func (r *AppendResource) Read(ctx context.Context, req resource.ReadRequest, res
 
 	// Read Terraform prior state data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
-
 	if resp.Diagnostics.HasError() {
 		return
+	}
+
+	id, diag := doAppend(ctx, data)
+	if diag.HasError() {
+		resp.Diagnostics.Append(diag...)
+		return
+	}
+	if id != data.Id.ValueString() {
+		data.Id = types.StringValue("")
+	} else {
+		data.Id = types.StringValue(id)
 	}
 
 	// Save updated data into Terraform state
@@ -223,8 +231,11 @@ func (r *AppendResource) Update(ctx context.Context, req resource.UpdateRequest,
 		resp.Diagnostics.Append(diag...)
 		return
 	}
-	data.Id = types.StringValue(id)
-
+	if id != data.Id.ValueString() {
+		data.Id = types.StringValue("")
+	} else {
+		data.Id = types.StringValue(id)
+	}
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
