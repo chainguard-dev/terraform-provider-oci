@@ -26,6 +26,7 @@ Image append resource
 ### Read-Only
 
 - `id` (String) Fully qualified image digest of the mutated image.
+- `image_ref` (String) Fully qualified image digest of the mutated image.
 
 <a id="nestedatt--layers"></a>
 ### Nested Schema for `layers`

@@ -23,5 +23,6 @@ Image ref data source
 
 - `digest` (String) Image digest of the image.
 - `id` (String) Fully qualified image digest of the image.
+- `tag` (String) Image tag of the image.
 
 
