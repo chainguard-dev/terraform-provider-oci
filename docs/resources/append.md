@@ -3,12 +3,12 @@
 page_title: "oci_append Resource - terraform-provider-oci"
 subcategory: ""
 description: |-
-  Image append resource
+  Append layers to an existing image.
 ---
 
 # oci_append (Resource)
 
-Image append resource
+Append layers to an existing image.
 
 
 
@@ -25,8 +25,8 @@ Image append resource
 
 ### Read-Only
 
-- `id` (String) Fully qualified image digest of the mutated image.
-- `image_ref` (String) Fully qualified image digest of the mutated image.
+- `id` (String) The resulting fully-qualified digest (e.g. {repo}@sha256:deadbeef).
+- `image_ref` (String) The resulting fully-qualified digest (e.g. {repo}@sha256:deadbeef).
 
 <a id="nestedatt--layers"></a>
 ### Nested Schema for `layers`
