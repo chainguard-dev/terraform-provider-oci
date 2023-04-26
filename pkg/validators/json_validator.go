@@ -1,5 +1,4 @@
-package provider
-
+package validators
 import (
 	"context"
 	"encoding/json"
