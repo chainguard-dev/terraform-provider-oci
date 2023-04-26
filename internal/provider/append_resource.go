@@ -17,6 +17,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -49,20 +50,24 @@ func (r *AppendResource) Metadata(ctx context.Context, req resource.MetadataRequ
 
 func (r *AppendResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		// This description is used by the documentation generator and the language server.
-		MarkdownDescription: "Image append resource",
-
+		MarkdownDescription: "Append layers to an existing image.",
 		Attributes: map[string]schema.Attribute{
 			"base_image": schema.StringAttribute{
 				MarkdownDescription: "Base image to append layers to.",
 				Optional:            true,
 				Computed:            true,
 				Default:             stringdefault.StaticString("cgr.dev/chainguard/static:latest"),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
 			"layers": schema.ListNestedAttribute{
 				MarkdownDescription: "Layers to append to the base image.",
 				Optional:            false,
 				Required:            true,
+				PlanModifiers: []planmodifier.List{
+					listplanmodifier.RequiresReplace(),
+				},
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"files": schema.MapNestedAttribute{
@@ -85,14 +90,13 @@ func (r *AppendResource) Schema(ctx context.Context, req resource.SchemaRequest,
 					},
 				},
 			},
-
 			"image_ref": schema.StringAttribute{
 				Computed:            true,
-				MarkdownDescription: "Fully qualified image digest of the mutated image.",
+				MarkdownDescription: "The resulting fully-qualified digest (e.g. {repo}@sha256:deadbeef).",
 			},
 			"id": schema.StringAttribute{
 				Computed:            true,
-				MarkdownDescription: "Fully qualified image digest of the mutated image.",
+				MarkdownDescription: "The resulting fully-qualified digest (e.g. {repo}@sha256:deadbeef).",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
@@ -140,13 +144,8 @@ func (r *AppendResource) Read(ctx context.Context, req resource.ReadRequest, res
 		return
 	}
 
-	if digest.String() != data.Id.ValueString() {
-		data.Id = types.StringValue("")
-		data.ImageRef = types.StringValue("")
-	} else {
-		data.Id = types.StringValue(digest.String())
-		data.ImageRef = types.StringValue(digest.String())
-	}
+	data.Id = types.StringValue(digest.String())
+	data.ImageRef = types.StringValue(digest.String())
 
 	// Save updated data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -164,13 +163,9 @@ func (r *AppendResource) Update(ctx context.Context, req resource.UpdateRequest,
 		resp.Diagnostics.Append(diag...)
 		return
 	}
-	if digest.String() != data.Id.ValueString() {
-		data.Id = types.StringValue("")
-		data.ImageRef = types.StringValue("")
-	} else {
-		data.Id = types.StringValue(digest.String())
-		data.ImageRef = types.StringValue(digest.String())
-	}
+
+	data.Id = types.StringValue(digest.String())
+	data.ImageRef = types.StringValue(digest.String())
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
