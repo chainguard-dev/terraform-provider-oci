@@ -2,28 +2,21 @@ package provider
 
 import (
 	"fmt"
-	"net/http/httptest"
-	"strings"
 	"testing"
 
-	"github.com/google/go-containerregistry/pkg/name"
-	"github.com/google/go-containerregistry/pkg/registry"
+	ocitesting "github.com/chainguard-dev/terraform-provider-oci/testing"
 	"github.com/google/go-containerregistry/pkg/v1/random"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
-func TestAccExampleDataSource(t *testing.T) {
-	// Setup a local registry and have tests push to that.
-	srv := httptest.NewServer(registry.New())
-	defer srv.Close()
-	ref, err := name.ParseReference(strings.TrimPrefix(srv.URL, "http://") + "/test:latest")
-	if err != nil {
-		t.Fatalf("failed to parse reference: %v", err)
-	}
-	t.Logf("Using ref: %s", ref)
+func TestAccRefDataSource(t *testing.T) {
+	repo, cleanup := ocitesting.SetupRepository(t, "test")
+	defer cleanup()
 
 	// Push an image to the local registry.
+	ref := repo.Tag("latest")
+	t.Logf("Using ref: %s", ref)
 	img, err := random.Image(1024, 1)
 	if err != nil {
 		t.Fatalf("failed to create image: %v", err)
@@ -37,11 +30,13 @@ func TestAccExampleDataSource(t *testing.T) {
 		t.Fatalf("failed to get image digest: %v", err)
 	}
 
+	refByDigest := ref.Context().Digest(d.String())
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
-			// Read testing
+			// A ref specified by tag has a .tag attribute.
 			{
 				Config: fmt.Sprintf(`data "oci_ref" "test" {
 				  ref = %q
@@ -49,6 +44,25 @@ func TestAccExampleDataSource(t *testing.T) {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("data.oci_ref.test", "id", ref.Context().Digest(d.String()).String()),
 					resource.TestCheckResourceAttr("data.oci_ref.test", "digest", d.String()),
+					resource.TestCheckResourceAttr("data.oci_ref.test", "tag", "latest"),
+				),
+			},
+		},
+	})
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			// A ref specified by digest has no .tag attribute.
+			{
+				Config: fmt.Sprintf(`data "oci_ref" "test" {
+				  ref = %q
+				}`, refByDigest),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("data.oci_ref.test", "id", ref.Context().Digest(d.String()).String()),
+					resource.TestCheckResourceAttr("data.oci_ref.test", "digest", d.String()),
+					resource.TestCheckNoResourceAttr("data.oci_ref.test", "tag"),
 				),
 			},
 		},

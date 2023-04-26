@@ -2,29 +2,22 @@ package provider
 
 import (
 	"fmt"
-	"net/http/httptest"
-	"strings"
+	"regexp"
 	"testing"
 
-	"github.com/google/go-containerregistry/pkg/name"
-	"github.com/google/go-containerregistry/pkg/registry"
+	ocitesting "github.com/chainguard-dev/terraform-provider-oci/testing"
 	"github.com/google/go-containerregistry/pkg/v1/random"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
-func TestAccExampleResource(t *testing.T) {
-	// Setup a local registry and have tests push to that.
-	srv := httptest.NewServer(registry.New())
-	defer srv.Close()
-
-	ref1, err := name.ParseReference(strings.TrimPrefix(srv.URL, "http://") + "/test:1")
-	if err != nil {
-		t.Fatalf("failed to parse reference: %v", err)
-	}
-	t.Logf("Using ref1: %s", ref1)
+func TestAccAppendResource(t *testing.T) {
+	repo, cleanup := ocitesting.SetupRepository(t, "test")
+	defer cleanup()
 
 	// Push an image to the local registry.
+	ref1 := repo.Tag("1")
+	t.Logf("Using ref1: %s", ref1)
 	img1, err := random.Image(1024, 1)
 	if err != nil {
 		t.Fatalf("failed to create image: %v", err)
@@ -33,13 +26,9 @@ func TestAccExampleResource(t *testing.T) {
 		t.Fatalf("failed to write image: %v", err)
 	}
 
-	ref2, err := name.ParseReference(strings.TrimPrefix(srv.URL, "http://") + "/test:2")
-	if err != nil {
-		t.Fatalf("failed to parse reference: %v", err)
-	}
-	t.Logf("Using ref2: %s", ref2)
-
 	// Push an image to the local registry.
+	ref2 := repo.Tag("2")
+	t.Logf("Using ref2: %s", ref2)
 	img2, err := random.Image(1024, 1)
 	if err != nil {
 		t.Fatalf("failed to create image: %v", err)
@@ -56,30 +45,32 @@ func TestAccExampleResource(t *testing.T) {
 			{
 				Config: fmt.Sprintf(`resource "oci_append" "test" {
 				  base_image = %q
+				  layers = [{
+					files = {
+					  "/usr/local/test.txt" = { contents = "hello world" }
+					}
+				  }]
 				}`, ref1),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("oci_append.test", "base_image", ref1.String()),
-					resource.TestCheckResourceAttr("oci_append.test", "id", "TODO"),
+					resource.TestMatchResourceAttr("oci_append.test", "image_ref", regexp.MustCompile(`/test@sha256:[0-9a-f]{64}$`)),
+					resource.TestMatchResourceAttr("oci_append.test", "id", regexp.MustCompile(`/test@sha256:[0-9a-f]{64}$`)),
 				),
-			},
-			// ImportState testing
-			{
-				ResourceName:      "oci_append.test",
-				ImportState:       true,
-				ImportStateVerify: true,
-				// This is not normally necessary, but is here because this
-				// example code does not have an actual upstream service.
-				// Once the Read method is able to refresh information from
-				// the upstream service, this can be removed.
-				ImportStateVerifyIgnore: []string{"base_image"},
 			},
 			// Update and Read testing
 			{
 				Config: fmt.Sprintf(`resource "oci_append" "test" {
 					base_image = %q
+					layers = [{
+					  files = {
+						"/usr/local/test.txt" = { contents = "hello world" }
+						"/usr/bin/test.sh"    = { contents = "echo hello world" }
+					  }
+					}]
 				  }`, ref2),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("oci_append.test", "base_image", ref2.String()),
+					resource.TestMatchResourceAttr("oci_append.test", "id", regexp.MustCompile(`/test@sha256:[0-9a-f]{64}$`)),
 				),
 			},
 			// Delete testing automatically occurs in TestCase
