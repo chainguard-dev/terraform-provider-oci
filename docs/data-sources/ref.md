@@ -21,11 +21,25 @@ Image ref data source
 
 ### Read-Only
 
+- `config` (Object) Config of an image. (see [below for nested schema](#nestedatt--config))
 - `digest` (String) Image digest of the image.
 - `id` (String) Fully qualified image digest of the image.
 - `images` (Map of Object) Map of image platforms to manifests. (see [below for nested schema](#nestedatt--images))
 - `manifest` (Object) Manifest of the image or index. (see [below for nested schema](#nestedatt--manifest))
 - `tag` (String) Image tag of the image.
+
+<a id="nestedatt--config"></a>
+### Nested Schema for `config`
+
+Read-Only:
+
+- `cmd` (List of String)
+- `created_at` (String)
+- `entrypoint` (List of String)
+- `env` (List of String)
+- `user` (String)
+- `working_dir` (String)
+
 
 <a id="nestedatt--images"></a>
 ### Nested Schema for `images`
