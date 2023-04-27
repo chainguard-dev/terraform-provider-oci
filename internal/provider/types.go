@@ -3,6 +3,7 @@ package provider
 import (
 	"fmt"
 	"math/big"
+	"time"
 
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
@@ -25,47 +26,46 @@ type Manifest struct {
 	Subject       *Descriptor             `tfsdk:"subject"`
 }
 
-func ManifestFromDescriptor(desc *remote.Descriptor) (*Manifest, error) {
+func (m *Manifest) FromDescriptor(desc *remote.Descriptor) error {
 	switch {
 	case desc.MediaType.IsImage():
 		img, err := desc.Image()
 		if err != nil {
-			return nil, err
+			return err
 		}
 		imf, err := img.Manifest()
 		if err != nil {
-			return nil, err
+			return err
 		}
-		return &Manifest{
-			SchemaVersion: basetypes.NewNumberValue(big.NewFloat(float64(imf.SchemaVersion))),
-			MediaType:     basetypes.NewStringValue(string(imf.MediaType)),
-			Config:        ToDescriptor(&imf.Config),
-			Layers:        ToDescriptors(imf.Layers),
-			Annotations:   ToStringMap(imf.Annotations),
-			Subject:       ToDescriptor(imf.Subject),
-			Manifests:     nil,
-		}, nil
+		m.SchemaVersion = basetypes.NewNumberValue(big.NewFloat(float64(imf.SchemaVersion)))
+		m.MediaType = basetypes.NewStringValue(string(imf.MediaType))
+		m.Config = ToDescriptor(&imf.Config)
+		m.Layers = ToDescriptors(imf.Layers)
+		m.Annotations = ToStringMap(imf.Annotations)
+		m.Subject = ToDescriptor(imf.Subject)
+		m.Manifests = nil
+		return nil
+
 	case desc.MediaType.IsIndex():
 		idx, err := desc.ImageIndex()
 		if err != nil {
-			return nil, err
+			return err
 		}
 		imf, err := idx.IndexManifest()
 		if err != nil {
-			return nil, err
+			return err
 		}
-		return &Manifest{
-			SchemaVersion: basetypes.NewNumberValue(big.NewFloat(float64(imf.SchemaVersion))),
-			MediaType:     basetypes.NewStringValue(string(imf.MediaType)),
-			Manifests:     ToDescriptors(imf.Manifests),
-			Annotations:   ToStringMap(imf.Annotations),
-			Subject:       ToDescriptor(imf.Subject),
-			Config:        nil,
-			Layers:        nil,
-		}, nil
-	default:
-		return nil, fmt.Errorf("unsupported media type: %s", desc.MediaType)
+		m.SchemaVersion = basetypes.NewNumberValue(big.NewFloat(float64(imf.SchemaVersion)))
+		m.MediaType = basetypes.NewStringValue(string(imf.MediaType))
+		m.Manifests = ToDescriptors(imf.Manifests)
+		m.Annotations = ToStringMap(imf.Annotations)
+		m.Subject = ToDescriptor(imf.Subject)
+		m.Config = nil
+		m.Layers = nil
+		return nil
 	}
+
+	return fmt.Errorf("unsupported media type: %s", desc.MediaType)
 }
 
 func ToStringMap(m map[string]string) map[string]basetypes.StringValue {
@@ -123,4 +123,40 @@ type Platform struct {
 	OS           types.String `tfsdk:"os"`
 	Variant      types.String `tfsdk:"variant"`
 	OSVersion    types.String `tfsdk:"os_version"`
+}
+
+type Config struct {
+	Env        []types.String `tfsdk:"env"`
+	User       types.String   `tfsdk:"user"`
+	WorkingDir types.String   `tfsdk:"working_dir"`
+	Entrypoint []types.String `tfsdk:"entrypoint"`
+	Cmd        []types.String `tfsdk:"cmd"`
+	CreatedAt  types.String   `tfsdk:"created_at"`
+}
+
+func (c *Config) FromConfigFile(cf *v1.ConfigFile) {
+	if c == nil {
+		c = &Config{}
+	}
+	if cf == nil {
+		return
+	}
+
+	c.Env = ToStrings(cf.Config.Env)
+	c.User = basetypes.NewStringValue(cf.Config.User)
+	c.WorkingDir = basetypes.NewStringValue(cf.Config.WorkingDir)
+	c.Entrypoint = ToStrings(cf.Config.Entrypoint)
+	c.Cmd = ToStrings(cf.Config.Cmd)
+	c.CreatedAt = basetypes.NewStringValue(cf.Created.Time.Format(time.RFC3339))
+}
+
+func ToStrings(ss []string) []basetypes.StringValue {
+	if len(ss) == 0 {
+		return nil
+	}
+	out := make([]basetypes.StringValue, len(ss))
+	for i, s := range ss {
+		out[i] = basetypes.NewStringValue(s)
+	}
+	return out
 }

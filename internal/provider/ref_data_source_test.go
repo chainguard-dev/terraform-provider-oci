@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"testing"
+	"time"
 
 	ocitesting "github.com/chainguard-dev/terraform-provider-oci/testing"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
@@ -32,6 +33,21 @@ func TestAccRefDataSource(t *testing.T) {
 	img = mutate.Annotations(img, map[string]string{ //nolint:forcetypeassert
 		"foo": "bar",
 	}).(v1.Image)
+	img, err = mutate.Config(img, v1.Config{
+		Env:        []string{"FOO=BAR"},
+		User:       "nobody",
+		Entrypoint: []string{"/bin/sh"},
+		Cmd:        []string{"-c", "echo hello world"},
+		WorkingDir: "/tmp",
+	})
+	if err != nil {
+		t.Fatalf("failed to mutate image: %v", err)
+	}
+	now := time.Now()
+	img, err = mutate.CreatedAt(img, v1.Time{Time: now})
+	if err != nil {
+		t.Fatalf("failed to mutate image: %v", err)
+	}
 	if err := remote.Write(ref, img); err != nil {
 		t.Fatalf("failed to write image: %v", err)
 	}
@@ -41,8 +57,10 @@ func TestAccRefDataSource(t *testing.T) {
 		t.Fatalf("failed to get image digest: %v", err)
 	}
 
-	// An image specified by tag has a .tag attribute, and all the other image manifest attributes.
+	cf, _ := img.ConfigFile()
+	t.Logf("Image config: %+v", cf) // TODO: remove
 
+	// An image specified by tag has a .tag attribute, and all the other image manifest attributes.
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -60,6 +78,16 @@ func TestAccRefDataSource(t *testing.T) {
 					resource.TestMatchResourceAttr("data.oci_ref.test", "manifest.layers.0.digest", digestRE),
 					resource.TestMatchResourceAttr("data.oci_ref.test", "manifest.layers.1.digest", digestRE),
 					resource.TestMatchResourceAttr("data.oci_ref.test", "manifest.layers.2.digest", digestRE),
+					resource.TestCheckResourceAttr("data.oci_ref.test", "config.env.#", "1"),
+					resource.TestCheckResourceAttr("data.oci_ref.test", "config.env.0", "FOO=BAR"),
+					resource.TestCheckResourceAttr("data.oci_ref.test", "config.user", "nobody"),
+					resource.TestCheckResourceAttr("data.oci_ref.test", "config.entrypoint.#", "1"),
+					resource.TestCheckResourceAttr("data.oci_ref.test", "config.entrypoint.0", "/bin/sh"),
+					resource.TestCheckResourceAttr("data.oci_ref.test", "config.cmd.#", "2"),
+					resource.TestCheckResourceAttr("data.oci_ref.test", "config.cmd.0", "-c"),
+					resource.TestCheckResourceAttr("data.oci_ref.test", "config.cmd.1", "echo hello world"),
+					resource.TestCheckResourceAttr("data.oci_ref.test", "config.working_dir", "/tmp"),
+					resource.TestCheckResourceAttr("data.oci_ref.test", "config.created_at", now.Format(time.RFC3339)),
 					resource.TestCheckResourceAttr("data.oci_ref.test", "manifest.annotations.foo", "bar"),
 					resource.TestCheckNoResourceAttr("data.oci_ref.test", "manifest.annotations.bar"),
 					resource.TestCheckNoResourceAttr("data.oci_ref.test", "manifest.manifests"),
@@ -115,12 +143,6 @@ func TestAccRefDataSource(t *testing.T) {
 		t.Fatalf("failed to write index: %v", err)
 	}
 
-	rmf, err := idx.RawManifest()
-	if err != nil {
-		t.Fatalf("failed to get index raw manifest: %v", err)
-	}
-	t.Log(string(rmf))
-
 	d, err = idx.Digest()
 	if err != nil {
 		t.Fatalf("failed to get index digest: %v", err)
@@ -156,6 +178,7 @@ func TestAccRefDataSource(t *testing.T) {
 					resource.TestCheckNoResourceAttr("data.oci_ref.test", "manifest.config"),
 					resource.TestCheckNoResourceAttr("data.oci_ref.test", "manifest.layers"),
 					resource.TestCheckNoResourceAttr("data.oci_ref.test", "manifest.subject"),
+					resource.TestCheckNoResourceAttr("data.oci_ref.test", "config"),
 				),
 			},
 		},

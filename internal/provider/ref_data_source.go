@@ -35,6 +35,7 @@ type RefDataSourceModel struct {
 	Manifest *Manifest `tfsdk:"manifest"`
 
 	Images map[string]Image `tfsdk:"images"`
+	Config *Config          `tfsdk:"config"`
 }
 
 func (d *RefDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -71,6 +72,7 @@ func (d *RefDataSource) Schema(ctx context.Context, req datasource.SchemaRequest
 				Computed:            true,
 				ElementType:         imageType,
 			},
+			"config": configAttribute,
 		},
 	}
 }
@@ -110,8 +112,8 @@ func (d *RefDataSource) Read(ctx context.Context, req datasource.ReadRequest, re
 
 	data.Id = types.StringValue(ref.Context().Digest(desc.Digest.String()).String())
 	data.Digest = types.StringValue(desc.Digest.String())
-	mf, err := ManifestFromDescriptor(desc)
-	if err != nil {
+	mf := &Manifest{}
+	if err := mf.FromDescriptor(desc); err != nil {
 		resp.Diagnostics.AddError("Unable to parse manifest", fmt.Sprintf("Unable to parse manifest for ref %s, got error: %s", data.Ref.String(), err))
 		return
 	}
@@ -138,6 +140,20 @@ func (d *RefDataSource) Read(ctx context.Context, req datasource.ReadRequest, re
 				ImageRef: types.StringValue(ref.Context().Digest(m.Digest.String()).String()),
 			}
 		}
+	} else if desc.MediaType.IsImage() {
+		img, err := desc.Image()
+		if err != nil {
+			resp.Diagnostics.AddError("Unable to parse image", fmt.Sprintf("Unable to parse image for ref %s, got error: %s", data.Ref.String(), err))
+			return
+		}
+		cf, err := img.ConfigFile()
+		if err != nil {
+			resp.Diagnostics.AddError("Unable to parse config", fmt.Sprintf("Unable to parse config for ref %s, got error: %s", data.Ref.String(), err))
+			return
+		}
+		cfg := &Config{}
+		cfg.FromConfigFile(cf)
+		data.Config = cfg
 	}
 
 	// Write logs using the tflog package
@@ -188,5 +204,24 @@ var descriptorType = basetypes.ObjectType{
 				"os_version":   basetypes.StringType{},
 			},
 		},
+	},
+}
+
+var configAttribute = schema.ObjectAttribute{
+	MarkdownDescription: "Config of an image.",
+	Computed:            true,
+	AttributeTypes: map[string]attr.Type{
+		"env": basetypes.ListType{
+			ElemType: basetypes.StringType{},
+		},
+		"user":        basetypes.StringType{},
+		"working_dir": basetypes.StringType{},
+		"entrypoint": basetypes.ListType{
+			ElemType: basetypes.StringType{},
+		},
+		"cmd": basetypes.ListType{
+			ElemType: basetypes.StringType{},
+		},
+		"created_at": basetypes.StringType{},
 	},
 }
