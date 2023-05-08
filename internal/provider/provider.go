@@ -53,6 +53,7 @@ func (p *OCIProvider) Configure(ctx context.Context, req provider.ConfigureReque
 func (p *OCIProvider) Resources(ctx context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		NewAppendResource,
+		NewTagResource,
 	}
 }
 
