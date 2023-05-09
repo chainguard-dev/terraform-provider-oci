@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/chainguard-dev/terraform-provider-oci/pkg/validators"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
@@ -12,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -45,11 +47,13 @@ func (r *TagResource) Schema(ctx context.Context, req resource.SchemaRequest, re
 			"digest_ref": schema.StringAttribute{
 				MarkdownDescription: "Image ref by digest to apply the tag to.",
 				Required:            true,
+				Validators:          []validator.String{validators.DigestValidator{}},
 				PlanModifiers:       []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
 			"tag": schema.StringAttribute{
 				MarkdownDescription: "Tag to apply to the image.",
 				Required:            true,
+				Validators:          []validator.String{validators.TagValidator{}},
 				PlanModifiers:       []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
 

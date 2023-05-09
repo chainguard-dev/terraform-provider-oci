@@ -7,12 +7,14 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 )
 
-// URLValidator is a string validator that checks that the string is a valid OCI reference.
+// RefValidator is a string validator that checks that the string is a valid OCI reference.
 type RefValidator struct{}
 
 var _ validator.String = RefValidator{}
 
-func (v RefValidator) Description(context.Context) string             { return "value must be a valid OCI ref" }
+func (v RefValidator) Description(context.Context) string {
+	return `value must be a valid OCI reference (e.g., "example.com/image:tag" or "example.com/image@sha256:abcdef...")`
+}
 func (v RefValidator) MarkdownDescription(ctx context.Context) string { return v.Description(ctx) }
 
 func (v RefValidator) ValidateString(_ context.Context, req validator.StringRequest, resp *validator.StringResponse) {
