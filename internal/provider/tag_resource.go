@@ -105,7 +105,9 @@ func (r *TagResource) Read(ctx context.Context, req resource.ReadRequest, resp *
 		return
 	}
 
-	// Don't actually tag, just return the
+	// Don't actually tag, but check whether the digest is already tagged so we get a useful diff.
+	// If the digest is already tagged, we'll set the ID and tagged_ref to the correct output value.
+	// Otherwise, we'll set them to empty strings so that the create will run when applied.
 
 	d, err := name.NewDigest(data.DigestRef.ValueString())
 	if err != nil {
