@@ -13,7 +13,7 @@ type DigestValidator struct{}
 var _ validator.String = DigestValidator{}
 
 func (v DigestValidator) Description(context.Context) string {
-	return "value must be a valid OCI digest"
+	return `value must be a valid OCI digest reference (e.g., "example.com/image@sha256:abcdef...")`
 }
 func (v DigestValidator) MarkdownDescription(ctx context.Context) string { return v.Description(ctx) }
 

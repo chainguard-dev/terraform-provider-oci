@@ -12,7 +12,7 @@ type RepoValidator struct{}
 var _ validator.String = RepoValidator{}
 
 func (v RepoValidator) Description(context.Context) string {
-	return "value must be a valid OCI repository"
+	return `value must be a valid OCI repository name (e.g., "example.com/image")`
 }
 func (v RepoValidator) MarkdownDescription(ctx context.Context) string { return v.Description(ctx) }
 
