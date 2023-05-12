@@ -1,6 +1,6 @@
 # Terraform Provider for OCI operations
 
-[![Tests](https://github.com/chainguard-dev/terraform-provider-oci/actions/workflows/test.yml/badge.svg)](https://github.com/imjasonh/terraform-provider-oci/actions/workflows/test.yml)
+[![Tests](https://github.com/chainguard-dev/terraform-provider-oci/actions/workflows/test.yml/badge.svg)](https://github.com/chainguard-dev/terraform-provider-oci/actions/workflows/test.yml)
 
 This provider is intended to provide some behavior similar to [`crane`](https://github.com/google/go-containerregistry/blob/main/cmd/crane/README.md).
 
