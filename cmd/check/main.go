@@ -1,6 +1,13 @@
 package main
 
 import (
+<<<<<<< HEAD
+<<<<<<< HEAD
+=======
+	"errors"
+>>>>>>> f44f427 (Add structure test package and tester executable)
+=======
+>>>>>>> 8938e1c (add datasource, drop mode, add positive and negative tests)
 	"fmt"
 	"os"
 	"regexp"
@@ -12,10 +19,25 @@ import (
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/spf13/cobra"
+<<<<<<< HEAD
+<<<<<<< HEAD
 )
 
 func main() {
 	var files, envs []string
+=======
+	"gopkg.in/src-d/go-git.v4/plumbing/filemode"
+)
+
+func main() {
+	var files, filemodes, envs []string
+>>>>>>> f44f427 (Add structure test package and tester executable)
+=======
+)
+
+func main() {
+	var files, envs []string
+>>>>>>> 8938e1c (add datasource, drop mode, add positive and negative tests)
 	var platform string
 
 	cmd := &cobra.Command{
@@ -41,11 +63,14 @@ func main() {
 			}
 
 			var conds structure.Conditions
+<<<<<<< HEAD
+=======
 
+>>>>>>> 8938e1c (add datasource, drop mode, add positive and negative tests)
 			fc := structure.FilesCondition{Want: map[string]structure.File{}}
 			for _, f := range files {
 				path, regex, _ := strings.Cut(f, "=")
-				fc.Want[path] = structure.File{Regex: regexp.MustCompile(regex).String()}
+				fc.Want[path] = structure.File{Regexp: regexp.MustCompile(regex).String()}
 			}
 			conds = append(conds, fc)
 
