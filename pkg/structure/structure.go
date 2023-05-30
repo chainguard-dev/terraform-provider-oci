@@ -60,7 +60,7 @@ type FilesCondition struct {
 }
 
 type File struct {
-	Regexp string
+	Regex string
 	// TODO: support filemode
 	ran bool
 }
@@ -85,20 +85,20 @@ func (f FilesCondition) Check(i v1.Image) error {
 			// We don't care about this file at all, on to the next.
 			continue
 		}
-		if f.Want[hdr.Name].Regexp != "" {
+		if f.Want[hdr.Name].Regex != "" {
 			// We care about the contents, so read and buffer them and regexp.
 			var buf bytes.Buffer
 			if _, err := io.Copy(&buf, tr); err != nil {
 				return err
 			}
-			if !regexp.MustCompile(f.Want[hdr.Name].Regexp).Match(buf.Bytes()) {
-				errs = append(errs, fmt.Errorf("file %q does not match regexp %q, got:\n%s", hdr.Name, f.Want[hdr.Name].Regexp, buf.String()))
+			if !regexp.MustCompile(f.Want[hdr.Name].Regex).Match(buf.Bytes()) {
+				errs = append(errs, fmt.Errorf("file %q does not match regexp %q, got:\n%s", hdr.Name, f.Want[hdr.Name].Regex, buf.String()))
 			}
 		}
 		// At least mark that we found this file we cared about.
 		f.Want[hdr.Name] = File{
-			Regexp: f.Want[hdr.Name].Regexp,
-			ran:    true,
+			Regex: f.Want[hdr.Name].Regex,
+			ran:   true,
 		}
 	}
 	for path, f := range f.Want {

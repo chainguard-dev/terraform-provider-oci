@@ -47,7 +47,7 @@ Required:
 
 Required:
 
-- `contents` (String)
 - `path` (String)
+- `regex` (String)
 
 

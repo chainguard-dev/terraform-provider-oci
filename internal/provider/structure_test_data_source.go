@@ -37,8 +37,8 @@ type StructureTestDataSourceModel struct {
 			Value types.String `tfsdk:"value"`
 		} `tfsdk:"env"`
 		Files []struct {
-			Path     types.String `tfsdk:"path"`
-			Contents types.String `tfsdk:"contents"`
+			Path  types.String `tfsdk:"path"`
+			Regex types.String `tfsdk:"regex"`
 		} `tfsdk:"files"`
 	} `tfsdk:"conditions"`
 
@@ -77,8 +77,8 @@ func (d *StructureTestDataSource) Schema(ctx context.Context, req datasource.Sch
 						"files": basetypes.ListType{
 							ElemType: basetypes.ObjectType{
 								AttrTypes: map[string]attr.Type{
-									"path":     basetypes.StringType{},
-									"contents": basetypes.StringType{},
+									"path":  basetypes.StringType{},
+									"regex": basetypes.StringType{},
 								},
 							},
 						},
@@ -136,7 +136,7 @@ func (d *StructureTestDataSource) Read(ctx context.Context, req datasource.ReadR
 		for _, f := range c.Files {
 			conds = append(conds, structure.FilesCondition{Want: map[string]structure.File{
 				f.Path.ValueString(): {
-					Regexp: f.Contents.ValueString(),
+					Regex: f.Regex.ValueString(),
 				},
 			}})
 		}

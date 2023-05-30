@@ -45,7 +45,7 @@ func main() {
 			fc := structure.FilesCondition{Want: map[string]structure.File{}}
 			for _, f := range files {
 				path, regex, _ := strings.Cut(f, "=")
-				fc.Want[path] = structure.File{Regexp: regexp.MustCompile(regex).String()}
+				fc.Want[path] = structure.File{Regex: regexp.MustCompile(regex).String()}
 			}
 			conds = append(conds, fc)
 

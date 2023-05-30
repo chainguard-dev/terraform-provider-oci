@@ -81,19 +81,19 @@ func TestAccStructureTestDataSource(t *testing.T) {
       value = "baz"
     }
     files {
-      path = "/foo"
-      contents = "bar"
+      path  = "/foo"
+      regex = "bar"
     }
     files {
       path = "/foo" # Just test existence.
     }
     files {
-      path = "/foo"
-      contents = "b[ar]+" # Test regexp.
+      path  = "/foo"
+      regex = "b[ar]+" # Test regexp.
     }
     files {
-      path = "/path/to/baz"
-      contents = "blah!!"
+      path  = "/path/to/baz"
+      regex = "blah!!"
     }
   }
 }`, ref),
