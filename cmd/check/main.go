@@ -41,7 +41,6 @@ func main() {
 			}
 
 			var conds structure.Conditions
-
 			fc := structure.FilesCondition{Want: map[string]structure.File{}}
 			for _, f := range files {
 				path, regex, _ := strings.Cut(f, "=")
