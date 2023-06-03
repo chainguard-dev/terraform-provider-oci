@@ -120,11 +120,18 @@ func (d *ExecTestDataSource) Read(ctx context.Context, req datasource.ReadReques
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
 	defer cancel()
 
+	repo := ref.Context().RepositoryStr()
+	registry := ref.Context().RegistryStr()
+
 	cmd := exec.CommandContext(ctx, "sh", "-c", data.Script.ValueString())
-	cmd.Env = append(os.Environ(), "IMAGE_NAME="+data.Digest.ValueString())
+	cmd.Env = append(os.Environ(),
+		"IMAGE_NAME="+data.Digest.ValueString(),
+		"IMAGE_REPOSITORY="+repo,
+		"IMAGE_REGISTRY="+registry,
+	)
 	out, err := cmd.CombinedOutput()
 	if len(out) > 1024 {
-		out = out[:1024] // trim output to 1KB
+		out = out[len(out)-1024:] // trim output to the last 1KB
 	}
 	data.TestedRef = data.Digest
 	data.Id = data.Digest
