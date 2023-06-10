@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
@@ -33,7 +32,9 @@ func NewAppendResource() resource.Resource {
 }
 
 // AppendResource defines the resource implementation.
-type AppendResource struct{}
+type AppendResource struct {
+	popts ProviderOpts
+}
 
 // AppendResourceModel describes the resource data model.
 type AppendResourceModel struct {
@@ -110,6 +111,13 @@ func (r *AppendResource) Configure(ctx context.Context, req resource.ConfigureRe
 	if req.ProviderData == nil {
 		return
 	}
+
+	popts, ok := req.ProviderData.(*ProviderOpts)
+	if !ok || popts == nil {
+		resp.Diagnostics.AddError("Client Error", "invalid provider data")
+		return
+	}
+	r.popts = *popts
 }
 
 func (r *AppendResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -119,7 +127,7 @@ func (r *AppendResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 
-	digest, diag := doAppend(ctx, data)
+	digest, diag := r.doAppend(ctx, data)
 	if diag.HasError() {
 		resp.Diagnostics.Append(diag...)
 		return
@@ -138,7 +146,7 @@ func (r *AppendResource) Read(ctx context.Context, req resource.ReadRequest, res
 		return
 	}
 
-	digest, diag := doAppend(ctx, data)
+	digest, diag := r.doAppend(ctx, data)
 	if diag.HasError() {
 		resp.Diagnostics.Append(diag...)
 		return
@@ -158,7 +166,7 @@ func (r *AppendResource) Update(ctx context.Context, req resource.UpdateRequest,
 		return
 	}
 
-	digest, diag := doAppend(ctx, data)
+	digest, diag := r.doAppend(ctx, data)
 	if diag.HasError() {
 		resp.Diagnostics.Append(diag...)
 		return
@@ -184,15 +192,12 @@ func (r *AppendResource) ImportState(ctx context.Context, req resource.ImportSta
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
-func doAppend(ctx context.Context, data *AppendResourceModel) (*name.Digest, diag.Diagnostics) {
+func (r *AppendResource) doAppend(ctx context.Context, data *AppendResourceModel) (*name.Digest, diag.Diagnostics) {
 	baseref, err := name.ParseReference(data.BaseImage.ValueString())
 	if err != nil {
 		return nil, []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to parse base image", fmt.Sprintf("Unable to parse base image %q, got error: %s", data.BaseImage.ValueString(), err))}
 	}
-	img, err := remote.Image(baseref,
-		remote.WithContext(ctx),
-		remote.WithAuthFromKeychain(authn.DefaultKeychain),
-	)
+	img, err := remote.Image(baseref, r.popts.withContext(ctx)...)
 	if err != nil {
 		return nil, []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to fetch base image", fmt.Sprintf("Unable to fetch base image %q, got error: %s", data.BaseImage.ValueString(), err))}
 	}
@@ -236,9 +241,7 @@ func doAppend(ctx context.Context, data *AppendResourceModel) (*name.Digest, dia
 	if err != nil {
 		return nil, []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to append layers", fmt.Sprintf("Unable to append layers, got error: %s", err))}
 	}
-	if err := remote.Write(baseref, img,
-		remote.WithContext(ctx),
-		remote.WithAuthFromKeychain(authn.DefaultKeychain)); err != nil {
+	if err := remote.Write(baseref, img, r.popts.withContext(ctx)...); err != nil {
 		return nil, []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to push image", fmt.Sprintf("Unable to push image, got error: %s", err))}
 	}
 	dig, err := img.Digest()

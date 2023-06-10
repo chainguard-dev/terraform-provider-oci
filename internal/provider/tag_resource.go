@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/chainguard-dev/terraform-provider-oci/pkg/validators"
-	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -25,7 +24,9 @@ func NewTagResource() resource.Resource {
 }
 
 // TagResource defines the resource implementation.
-type TagResource struct{}
+type TagResource struct {
+	popts ProviderOpts
+}
 
 // TagResourceModel describes the resource data model.
 type TagResourceModel struct {
@@ -76,6 +77,13 @@ func (r *TagResource) Configure(ctx context.Context, req resource.ConfigureReque
 	if req.ProviderData == nil {
 		return
 	}
+
+	popts, ok := req.ProviderData.(*ProviderOpts)
+	if !ok || popts == nil {
+		resp.Diagnostics.AddError("Client Error", "invalid provider data")
+		return
+	}
+	r.popts = *popts
 }
 
 func (r *TagResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -85,7 +93,7 @@ func (r *TagResource) Create(ctx context.Context, req resource.CreateRequest, re
 		return
 	}
 
-	digest, err := doTag(ctx, data)
+	digest, err := r.doTag(ctx, data)
 	if err != nil {
 		resp.Diagnostics.AddError("Tag Error", fmt.Sprintf("Error tagging image: %s", err.Error()))
 		return
@@ -116,7 +124,7 @@ func (r *TagResource) Read(ctx context.Context, req resource.ReadRequest, resp *
 	}
 
 	t := d.Context().Tag(data.Tag.ValueString())
-	desc, err := remote.Get(t, remote.WithAuthFromKeychain(authn.DefaultKeychain))
+	desc, err := remote.Get(t, r.popts.withContext(ctx)...)
 	if err != nil {
 		resp.Diagnostics.AddError("Tag Error", fmt.Sprintf("Error getting image: %s", err.Error()))
 		return
@@ -142,7 +150,7 @@ func (r *TagResource) Update(ctx context.Context, req resource.UpdateRequest, re
 		return
 	}
 
-	digest, err := doTag(ctx, data)
+	digest, err := r.doTag(ctx, data)
 	if err != nil {
 		resp.Diagnostics.AddError("Tag Error", fmt.Sprintf("Error tagging image: %s", err.Error()))
 		return
@@ -162,7 +170,7 @@ func (r *TagResource) ImportState(ctx context.Context, req resource.ImportStateR
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
-func doTag(ctx context.Context, data *TagResourceModel) (string, error) {
+func (r *TagResource) doTag(ctx context.Context, data *TagResourceModel) (string, error) {
 	d, err := name.NewDigest(data.DigestRef.ValueString())
 	if err != nil {
 		return "", fmt.Errorf("digest_ref must be a digest reference: %v", err)
@@ -171,16 +179,11 @@ func doTag(ctx context.Context, data *TagResourceModel) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("error parsing tag: %v", err)
 	}
-
-	desc, err := remote.Get(d,
-		remote.WithContext(ctx),
-		remote.WithAuthFromKeychain(authn.DefaultKeychain))
+	desc, err := remote.Get(d, r.popts.withContext(ctx)...)
 	if err != nil {
 		return "", fmt.Errorf("error fetching digest: %v", err)
 	}
-	if err := remote.Tag(t, desc,
-		remote.WithContext(ctx),
-		remote.WithAuthFromKeychain(authn.DefaultKeychain)); err != nil {
+	if err := remote.Tag(t, desc, r.popts.withContext(ctx)...); err != nil {
 		return "", fmt.Errorf("error tagging digest: %v", err)
 	}
 	digest := fmt.Sprintf("%s@%s", t.Name(), desc.Digest.String())
