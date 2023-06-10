@@ -6,7 +6,6 @@ import (
 
 	"github.com/chainguard-dev/terraform-provider-oci/pkg/structure"
 	"github.com/chainguard-dev/terraform-provider-oci/pkg/validators"
-	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -26,7 +25,9 @@ func NewStructureTestDataSource() datasource.DataSource {
 }
 
 // StructureTestDataSource defines the data source implementation.
-type StructureTestDataSource struct{}
+type StructureTestDataSource struct {
+	popts ProviderOpts
+}
 
 // StructureTestDataSourceModel describes the data source data model.
 type StructureTestDataSourceModel struct {
@@ -105,6 +106,13 @@ func (d *StructureTestDataSource) Configure(ctx context.Context, req datasource.
 	if req.ProviderData == nil {
 		return
 	}
+
+	popts, ok := req.ProviderData.(*ProviderOpts)
+	if !ok || popts == nil {
+		resp.Diagnostics.AddError("Client Error", "invalid provider data")
+		return
+	}
+	d.popts = *popts
 }
 
 func (d *StructureTestDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
@@ -120,7 +128,7 @@ func (d *StructureTestDataSource) Read(ctx context.Context, req datasource.ReadR
 		return
 	}
 	// TODO: This should accept a platform, or fail if the ref points to an index.
-	img, err := remote.Image(ref, remote.WithAuthFromKeychain(authn.DefaultKeychain))
+	img, err := remote.Image(ref, d.popts.withContext(ctx)...)
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to fetch image", fmt.Sprintf("Unable to fetch image for ref %s, got error: %s", data.Digest.ValueString(), err))
 		return

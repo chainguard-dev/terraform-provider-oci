@@ -2,13 +2,18 @@ package provider
 
 import (
 	"context"
-	"net/http"
 
+	"github.com/google/go-containerregistry/pkg/authn"
+	"github.com/google/go-containerregistry/pkg/v1/google"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 )
+
+// This is stupid.
+var Context context.Context
 
 var _ provider.Provider = &OCIProvider{}
 
@@ -23,6 +28,14 @@ type OCIProvider struct {
 // OCIProviderModel describes the provider data model.
 type OCIProviderModel struct {
 	// TODO: Add provider configuration attributes here.
+}
+
+type ProviderOpts struct {
+	ropts []remote.Option
+}
+
+func (p *ProviderOpts) withContext(ctx context.Context) []remote.Option {
+	return append([]remote.Option{remote.WithContext(ctx)}, p.ropts...)
 }
 
 func (p *OCIProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
@@ -45,9 +58,29 @@ func (p *OCIProvider) Configure(ctx context.Context, req provider.ConfigureReque
 		return
 	}
 
-	client := http.DefaultClient
-	resp.DataSourceData = client
-	resp.ResourceData = client
+	kc := authn.NewMultiKeychain(google.Keychain, authn.DefaultKeychain)
+	ropts := []remote.Option{remote.WithAuthFromKeychain(kc)}
+
+	// These errors are impossible in current impl, but we can't return an err, so panic.
+	puller, err := remote.NewPuller(ropts...)
+	if err != nil {
+		resp.Diagnostics.AddError("NewPuller", err.Error())
+		return
+	}
+
+	pusher, err := remote.NewPusher(ropts...)
+	if err != nil {
+		resp.Diagnostics.AddError("NewPusher", err.Error())
+		return
+	}
+
+	ropts = append(ropts, remote.Reuse(puller), remote.Reuse(pusher))
+
+	opts := &ProviderOpts{
+		ropts: ropts,
+	}
+	resp.DataSourceData = opts
+	resp.ResourceData = opts
 }
 
 func (p *OCIProvider) Resources(ctx context.Context) []func() resource.Resource {
