@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/google/go-containerregistry/pkg/name"
-	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
@@ -109,7 +108,7 @@ func (d *RefDataSource) Read(ctx context.Context, req datasource.ReadRequest, re
 	if t, ok := ref.(name.Tag); ok {
 		data.Tag = types.StringValue(t.TagStr())
 	}
-	desc, err := remote.Get(ref, d.popts.withContext(ctx)...)
+	desc, err := d.popts.get(ctx, ref)
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to read ref", fmt.Sprintf("Unable to read ref %s, got error: %s", data.Ref.String(), err))
 		return

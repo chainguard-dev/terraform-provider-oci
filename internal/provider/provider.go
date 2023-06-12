@@ -2,8 +2,10 @@ package provider
 
 import (
 	"context"
+	"sync"
 
 	"github.com/google/go-containerregistry/pkg/authn"
+	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/google"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -32,10 +34,33 @@ type OCIProviderModel struct {
 
 type ProviderOpts struct {
 	ropts []remote.Option
+
+	sync.Mutex
+	cache map[name.Digest]*remote.Descriptor
 }
 
 func (p *ProviderOpts) withContext(ctx context.Context) []remote.Option {
 	return append([]remote.Option{remote.WithContext(ctx)}, p.ropts...)
+}
+
+func (p *ProviderOpts) get(ctx context.Context, ref name.Reference) (*remote.Descriptor, error) {
+	if d, ok := ref.(name.Digest); ok {
+		// Only use cache for fetches by digest.
+		if desc, ok := p.cache[d]; ok {
+			return desc, nil
+		}
+	}
+
+	desc, err := remote.Get(ref, p.withContext(ctx)...)
+	if err == nil {
+		// Always cache the result by digest.
+		d := ref.Context().Digest(desc.Digest.String())
+		p.Lock()
+		p.cache[d] = desc
+		p.Unlock()
+	}
+
+	return desc, err
 }
 
 func (p *OCIProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
@@ -78,6 +103,7 @@ func (p *OCIProvider) Configure(ctx context.Context, req provider.ConfigureReque
 
 	opts := &ProviderOpts{
 		ropts: ropts,
+		cache: map[name.Digest]*remote.Descriptor{},
 	}
 	resp.DataSourceData = opts
 	resp.ResourceData = opts

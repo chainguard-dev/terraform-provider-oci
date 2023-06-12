@@ -124,7 +124,7 @@ func (r *TagResource) Read(ctx context.Context, req resource.ReadRequest, resp *
 	}
 
 	t := d.Context().Tag(data.Tag.ValueString())
-	desc, err := remote.Get(t, r.popts.withContext(ctx)...)
+	desc, err := r.popts.get(ctx, t)
 	if err != nil {
 		resp.Diagnostics.AddError("Tag Error", fmt.Sprintf("Error getting image: %s", err.Error()))
 		return
@@ -179,8 +179,7 @@ func (r *TagResource) doTag(ctx context.Context, data *TagResourceModel) (string
 	if err != nil {
 		return "", fmt.Errorf("error parsing tag: %v", err)
 	}
-
-	desc, err := remote.Get(d, r.popts.withContext(ctx)...)
+	desc, err := r.popts.get(ctx, d)
 	if err != nil {
 		return "", fmt.Errorf("error fetching digest: %v", err)
 	}
