@@ -33,7 +33,7 @@ func NewAppendResource() resource.Resource {
 
 // AppendResource defines the resource implementation.
 type AppendResource struct {
-	popts ProviderOpts
+	popts *ProviderOpts
 }
 
 // AppendResourceModel describes the resource data model.
@@ -117,7 +117,7 @@ func (r *AppendResource) Configure(ctx context.Context, req resource.ConfigureRe
 		resp.Diagnostics.AddError("Client Error", "invalid provider data")
 		return
 	}
-	r.popts = *popts
+	r.popts = popts
 }
 
 func (r *AppendResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {

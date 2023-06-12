@@ -26,7 +26,7 @@ func NewStructureTestDataSource() datasource.DataSource {
 
 // StructureTestDataSource defines the data source implementation.
 type StructureTestDataSource struct {
-	popts ProviderOpts
+	popts *ProviderOpts
 }
 
 // StructureTestDataSourceModel describes the data source data model.
@@ -112,7 +112,7 @@ func (d *StructureTestDataSource) Configure(ctx context.Context, req datasource.
 		resp.Diagnostics.AddError("Client Error", "invalid provider data")
 		return
 	}
-	d.popts = *popts
+	d.popts = popts
 }
 
 func (d *StructureTestDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {

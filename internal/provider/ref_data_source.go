@@ -22,7 +22,7 @@ func NewRefDataSource() datasource.DataSource {
 
 // RefDataSource defines the data source implementation.
 type RefDataSource struct {
-	popts ProviderOpts
+	popts *ProviderOpts
 }
 
 // RefDataSourceModel describes the data source data model.
@@ -88,7 +88,7 @@ func (d *RefDataSource) Configure(ctx context.Context, req datasource.ConfigureR
 		resp.Diagnostics.AddError("Client Error", "invalid provider data")
 		return
 	}
-	d.popts = *popts
+	d.popts = popts
 }
 
 func (d *RefDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {

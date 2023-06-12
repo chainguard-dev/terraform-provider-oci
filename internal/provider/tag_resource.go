@@ -25,7 +25,7 @@ func NewTagResource() resource.Resource {
 
 // TagResource defines the resource implementation.
 type TagResource struct {
-	popts ProviderOpts
+	popts *ProviderOpts
 }
 
 // TagResourceModel describes the resource data model.
@@ -83,7 +83,7 @@ func (r *TagResource) Configure(ctx context.Context, req resource.ConfigureReque
 		resp.Diagnostics.AddError("Client Error", "invalid provider data")
 		return
 	}
-	r.popts = *popts
+	r.popts = popts
 }
 
 func (r *TagResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {

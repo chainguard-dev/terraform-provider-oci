@@ -27,7 +27,7 @@ func NewExecTestDataSource() datasource.DataSource {
 
 // ExecTestDataSource defines the data source implementation.
 type ExecTestDataSource struct {
-	popts ProviderOpts
+	popts *ProviderOpts
 }
 
 // ExecTestDataSourceModel describes the data source data model.
@@ -100,7 +100,7 @@ func (d *ExecTestDataSource) Configure(ctx context.Context, req datasource.Confi
 		resp.Diagnostics.AddError("Client Error", "invalid provider data")
 		return
 	}
-	d.popts = *popts
+	d.popts = popts
 }
 
 func (d *ExecTestDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
@@ -143,15 +143,15 @@ func (d *ExecTestDataSource) Read(ctx context.Context, req datasource.ReadReques
 
 	data.TestedRef = data.Digest
 	data.Id = data.Digest
-	data.ExitCode = types.Int64Value(int64(0))
+	data.ExitCode = types.Int64Value(int64(cmd.ProcessState.ExitCode()))
 	data.Output = types.StringValue(string(out))
 
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		resp.Diagnostics.AddError("Test timed out", fmt.Sprintf("Test for ref %s timed out after %d seconds", data.Digest.ValueString(), timeout))
 		return
-		// } else if err != nil {
-		// 	resp.Diagnostics.AddError("Test failed", fmt.Sprintf("Test failed for ref %s, got error: %s\n%s", data.Digest.ValueString(), err, string(out)))
-		// 	return
+	} else if err != nil {
+		resp.Diagnostics.AddError("Test failed", fmt.Sprintf("Test failed for ref %s, got error: %s\n%s", data.Digest.ValueString(), err, string(out)))
+		return
 	}
 
 	// Write logs using the tflog package
