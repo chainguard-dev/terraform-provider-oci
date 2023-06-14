@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -23,7 +22,9 @@ func NewRefDataSource() datasource.DataSource {
 }
 
 // RefDataSource defines the data source implementation.
-type RefDataSource struct{}
+type RefDataSource struct {
+	popts ProviderOpts
+}
 
 // RefDataSourceModel describes the data source data model.
 type RefDataSourceModel struct {
@@ -82,6 +83,13 @@ func (d *RefDataSource) Configure(ctx context.Context, req datasource.ConfigureR
 	if req.ProviderData == nil {
 		return
 	}
+
+	popts, ok := req.ProviderData.(*ProviderOpts)
+	if !ok || popts == nil {
+		resp.Diagnostics.AddError("Client Error", "invalid provider data")
+		return
+	}
+	d.popts = *popts
 }
 
 func (d *RefDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
@@ -101,10 +109,7 @@ func (d *RefDataSource) Read(ctx context.Context, req datasource.ReadRequest, re
 	if t, ok := ref.(name.Tag); ok {
 		data.Tag = types.StringValue(t.TagStr())
 	}
-	desc, err := remote.Get(ref,
-		remote.WithContext(ctx),
-		remote.WithAuthFromKeychain(authn.DefaultKeychain),
-	)
+	desc, err := remote.Get(ref, d.popts.withContext(ctx)...)
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to read ref", fmt.Sprintf("Unable to read ref %s, got error: %s", data.Ref.String(), err))
 		return

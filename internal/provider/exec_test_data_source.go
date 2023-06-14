@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/chainguard-dev/terraform-provider-oci/pkg/validators"
-	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -27,7 +26,9 @@ func NewExecTestDataSource() datasource.DataSource {
 }
 
 // ExecTestDataSource defines the data source implementation.
-type ExecTestDataSource struct{}
+type ExecTestDataSource struct {
+	popts ProviderOpts
+}
 
 // ExecTestDataSourceModel describes the data source data model.
 type ExecTestDataSourceModel struct {
@@ -93,6 +94,13 @@ func (d *ExecTestDataSource) Configure(ctx context.Context, req datasource.Confi
 	if req.ProviderData == nil {
 		return
 	}
+
+	popts, ok := req.ProviderData.(*ProviderOpts)
+	if !ok || popts == nil {
+		resp.Diagnostics.AddError("Client Error", "invalid provider data")
+		return
+	}
+	d.popts = *popts
 }
 
 func (d *ExecTestDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
@@ -108,7 +116,7 @@ func (d *ExecTestDataSource) Read(ctx context.Context, req datasource.ReadReques
 		return
 	}
 	// Check we can get the image before running the test.
-	if _, err := remote.Image(ref, remote.WithAuthFromKeychain(authn.DefaultKeychain)); err != nil {
+	if _, err := remote.Image(ref, d.popts.withContext(ctx)...); err != nil {
 		resp.Diagnostics.AddError("Unable to fetch image", fmt.Sprintf("Unable to fetch image for ref %s, got error: %s", data.Digest.ValueString(), err))
 		return
 	}
@@ -122,7 +130,6 @@ func (d *ExecTestDataSource) Read(ctx context.Context, req datasource.ReadReques
 
 	repo := ref.Context().RepositoryStr()
 	registry := ref.Context().RegistryStr()
-
 	cmd := exec.CommandContext(ctx, "sh", "-c", data.Script.ValueString())
 	cmd.Env = append(os.Environ(),
 		"IMAGE_NAME="+data.Digest.ValueString(),
@@ -133,6 +140,7 @@ func (d *ExecTestDataSource) Read(ctx context.Context, req datasource.ReadReques
 	if len(out) > 1024 {
 		out = out[len(out)-1024:] // trim output to the last 1KB
 	}
+
 	data.TestedRef = data.Digest
 	data.Id = data.Digest
 	data.ExitCode = types.Int64Value(int64(cmd.ProcessState.ExitCode()))
