@@ -20,15 +20,18 @@ type OCIProvider struct {
 	// provider is built and ran locally, and "test" when running acceptance
 	// testing.
 	version string
+
+	defaultExecTimeoutSeconds int64
 }
 
 // OCIProviderModel describes the provider data model.
 type OCIProviderModel struct {
-	// TODO: Add provider configuration attributes here.
+	DefaultExecTimeoutSeconds *int64 `tfsdk:"default_exec_timeout_seconds"`
 }
 
 type ProviderOpts struct {
-	ropts []remote.Option
+	ropts                     []remote.Option
+	defaultExecTimeoutSeconds int64
 }
 
 func (p *ProviderOpts) withContext(ctx context.Context) []remote.Option {
@@ -43,7 +46,10 @@ func (p *OCIProvider) Metadata(ctx context.Context, req provider.MetadataRequest
 func (p *OCIProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
-			// TODO: Add provider configuration attributes here.
+			"default_exec_timeout_seconds": schema.Int64Attribute{
+				MarkdownDescription: "Default timeout for exec tests",
+				Optional:            true,
+			},
 		},
 	}
 }
@@ -76,6 +82,13 @@ func (p *OCIProvider) Configure(ctx context.Context, req provider.ConfigureReque
 	opts := &ProviderOpts{
 		ropts: ropts,
 	}
+	if p.defaultExecTimeoutSeconds != 0 {
+		// This is only for testing, so we can inject provider config
+		opts.defaultExecTimeoutSeconds = p.defaultExecTimeoutSeconds
+	} else if data.DefaultExecTimeoutSeconds != nil {
+		opts.defaultExecTimeoutSeconds = *data.DefaultExecTimeoutSeconds
+	}
+
 	resp.DataSourceData = opts
 	resp.ResourceData = opts
 }
