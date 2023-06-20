@@ -29,7 +29,7 @@ func TestAccExecTestDataSource(t *testing.T) {
 
   script = "docker run --rm $${IMAGE_NAME} echo hello | grep hello"
 }`, d.String()),
-			Check: resource.ComposeTestCheckFunc(
+			Check: resource.ComposeAggregateTestCheckFunc(
 				resource.TestCheckResourceAttr("data.oci_exec_test.test", "digest", fmt.Sprintf("cgr.dev/chainguard/wolfi-base@%s", d.String())),
 				resource.TestCheckResourceAttr("data.oci_exec_test.test", "id", fmt.Sprintf("cgr.dev/chainguard/wolfi-base@%s", d.String())),
 				resource.TestCheckResourceAttr("data.oci_exec_test.test", "exit_code", "0"),
@@ -41,7 +41,7 @@ func TestAccExecTestDataSource(t *testing.T) {
 
   script = "echo IMAGE_NAME=$${IMAGE_NAME} IMAGE_REPOSITORY=$${IMAGE_REPOSITORY} IMAGE_REGISTRY=$${IMAGE_REGISTRY}"
 }`, d.String()),
-			Check: resource.ComposeTestCheckFunc(
+			Check: resource.ComposeAggregateTestCheckFunc(
 				resource.TestCheckResourceAttr("data.oci_exec_test.env", "digest", fmt.Sprintf("cgr.dev/chainguard/wolfi-base@%s", d.String())),
 				resource.TestCheckResourceAttr("data.oci_exec_test.env", "id", fmt.Sprintf("cgr.dev/chainguard/wolfi-base@%s", d.String())),
 				resource.TestCheckResourceAttr("data.oci_exec_test.env", "exit_code", "0"),
@@ -63,6 +63,19 @@ func TestAccExecTestDataSource(t *testing.T) {
 	  script = "sleep 6"
 	}`, d.String()),
 			ExpectError: regexp.MustCompile(`Test for ref\ncgr.dev/chainguard/wolfi-base@sha256:[0-9a-f]{64}\ntimed out after 1 seconds`),
+		}, {
+			Config: fmt.Sprintf(`data "oci_exec_test" "working_dir" {
+		  digest = "cgr.dev/chainguard/wolfi-base@%s"
+		  working_dir = "${path.module}/../../"
+
+		  script = "grep 'Terraform Provider for OCI operations' README.md"
+		}`, d.String()),
+			Check: resource.ComposeAggregateTestCheckFunc(
+				resource.TestCheckResourceAttr("data.oci_exec_test.working_dir", "digest", fmt.Sprintf("cgr.dev/chainguard/wolfi-base@%s", d.String())),
+				resource.TestCheckResourceAttr("data.oci_exec_test.working_dir", "id", fmt.Sprintf("cgr.dev/chainguard/wolfi-base@%s", d.String())),
+				resource.TestCheckResourceAttr("data.oci_exec_test.working_dir", "exit_code", "0"),
+				resource.TestCheckResourceAttr("data.oci_exec_test.working_dir", "output", "# Terraform Provider for OCI operations\n"),
+			),
 		}},
 	})
 
