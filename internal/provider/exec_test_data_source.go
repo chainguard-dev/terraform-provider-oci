@@ -123,7 +123,11 @@ func (d *ExecTestDataSource) Read(ctx context.Context, req datasource.ReadReques
 
 	timeout := data.TimeoutSeconds.ValueInt64()
 	if timeout == 0 {
-		timeout = 300
+		if d.popts.defaultExecTimeoutSeconds != 0 {
+			timeout = d.popts.defaultExecTimeoutSeconds
+		} else {
+			timeout = 300
+		}
 	}
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
 	defer cancel()

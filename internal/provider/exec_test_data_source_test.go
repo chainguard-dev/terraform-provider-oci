@@ -7,6 +7,8 @@ import (
 
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/hashicorp/terraform-plugin-framework/providerserver"
+	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
@@ -62,6 +64,22 @@ func TestAccExecTestDataSource(t *testing.T) {
 
 	  script = "sleep 6"
 	}`, d.String()),
+			ExpectError: regexp.MustCompile(`Test for ref\ncgr.dev/chainguard/wolfi-base@sha256:[0-9a-f]{64}\ntimed out after 1 seconds`),
+		}},
+	})
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: map[string]func() (tfprotov6.ProviderServer, error){
+			"oci": providerserver.NewProtocol6WithError(&OCIProvider{
+				defaultExecTimeoutSeconds: 1,
+			}),
+		}, Steps: []resource.TestStep{{
+			Config: fmt.Sprintf(`data "oci_exec_test" "provider-timeout" {
+  digest = "cgr.dev/chainguard/wolfi-base@%s"
+
+  script = "sleep 6"
+}`, d.String()),
 			ExpectError: regexp.MustCompile(`Test for ref\ncgr.dev/chainguard/wolfi-base@sha256:[0-9a-f]{64}\ntimed out after 1 seconds`),
 		}},
 	})
