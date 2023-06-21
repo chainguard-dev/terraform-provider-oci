@@ -49,5 +49,3 @@ Required:
 
 - `path` (String)
 - `regex` (String)
-
-

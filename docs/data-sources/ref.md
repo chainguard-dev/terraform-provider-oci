@@ -154,5 +154,3 @@ Read-Only:
 - `os` (String)
 - `os_version` (String)
 - `variant` (String)
-
-
