@@ -22,6 +22,7 @@ Exec test data source
 
 ### Optional
 
+- `env` (List of Object) Environment variables for the test (see [below for nested schema](#nestedatt--env))
 - `timeout_seconds` (Number) Timeout for the test in seconds (default is 5 minutes)
 - `working_dir` (String) Working directory for the test
 
@@ -31,5 +32,13 @@ Exec test data source
 - `id` (String) Fully qualified image digest of the image.
 - `output` (String) Output of the test
 - `tested_ref` (String) Tested image ref by digest.
+
+<a id="nestedatt--env"></a>
+### Nested Schema for `env`
+
+Optional:
+
+- `name` (String)
+- `value` (String)
 
 
