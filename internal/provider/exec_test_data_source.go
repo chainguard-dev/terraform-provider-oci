@@ -35,6 +35,7 @@ type ExecTestDataSourceModel struct {
 	Digest         types.String `tfsdk:"digest"`
 	Script         types.String `tfsdk:"script"`
 	TimeoutSeconds types.Int64  `tfsdk:"timeout_seconds"`
+	WorkingDir     types.String `tfsdk:"working_dir"`
 
 	ExitCode  types.Int64  `tfsdk:"exit_code"`
 	Output    types.String `tfsdk:"output"`
@@ -65,6 +66,10 @@ func (d *ExecTestDataSource) Schema(ctx context.Context, req datasource.SchemaRe
 				MarkdownDescription: "Timeout for the test in seconds (default is 5 minutes)",
 				Optional:            true,
 				Validators:          []validator.Int64{positiveIntValidator{}},
+			},
+			"working_dir": schema.StringAttribute{
+				MarkdownDescription: "Working directory for the test",
+				Optional:            true,
 			},
 
 			// TODO: platform?
@@ -140,6 +145,7 @@ func (d *ExecTestDataSource) Read(ctx context.Context, req datasource.ReadReques
 		"IMAGE_REPOSITORY="+repo,
 		"IMAGE_REGISTRY="+registry,
 	)
+	cmd.Dir = data.WorkingDir.ValueString()
 	out, err := cmd.CombinedOutput()
 	if len(out) > 1024 {
 		out = out[len(out)-1024:] // trim output to the last 1KB

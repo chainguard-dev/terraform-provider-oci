@@ -23,6 +23,7 @@ Exec test data source
 ### Optional
 
 - `timeout_seconds` (Number) Timeout for the test in seconds (default is 5 minutes)
+- `working_dir` (String) Working directory for the test
 
 ### Read-Only
 
