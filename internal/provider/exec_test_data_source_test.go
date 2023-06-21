@@ -41,13 +41,22 @@ func TestAccExecTestDataSource(t *testing.T) {
 			Config: fmt.Sprintf(`data "oci_exec_test" "env" {
   digest = "cgr.dev/chainguard/wolfi-base@%s"
 
-  script = "echo IMAGE_NAME=$${IMAGE_NAME} IMAGE_REPOSITORY=$${IMAGE_REPOSITORY} IMAGE_REGISTRY=$${IMAGE_REGISTRY}"
+  env {
+	name  = "FOO"
+	value = "bar"
+  }
+  env {
+	name  = "BAR"
+	value = "baz"
+  }
+
+  script = "echo IMAGE_NAME=$${IMAGE_NAME} IMAGE_REPOSITORY=$${IMAGE_REPOSITORY} IMAGE_REGISTRY=$${IMAGE_REGISTRY} FOO=bar BAR=baz FREE_PORT=$${FREE_PORT}"
 }`, d.String()),
 			Check: resource.ComposeAggregateTestCheckFunc(
 				resource.TestCheckResourceAttr("data.oci_exec_test.env", "digest", fmt.Sprintf("cgr.dev/chainguard/wolfi-base@%s", d.String())),
 				resource.TestCheckResourceAttr("data.oci_exec_test.env", "id", fmt.Sprintf("cgr.dev/chainguard/wolfi-base@%s", d.String())),
 				resource.TestCheckResourceAttr("data.oci_exec_test.env", "exit_code", "0"),
-				resource.TestCheckResourceAttr("data.oci_exec_test.env", "output", fmt.Sprintf("IMAGE_NAME=cgr.dev/chainguard/wolfi-base@%s IMAGE_REPOSITORY=chainguard/wolfi-base IMAGE_REGISTRY=cgr.dev\n", d.String())),
+				resource.TestMatchResourceAttr("data.oci_exec_test.env", "output", regexp.MustCompile(fmt.Sprintf("IMAGE_NAME=cgr.dev/chainguard/wolfi-base@%s IMAGE_REPOSITORY=chainguard/wolfi-base IMAGE_REGISTRY=cgr.dev FOO=bar BAR=baz FREE_PORT=[0-9]+\n", d.String()))),
 			),
 		}, {
 			Config: fmt.Sprintf(`data "oci_exec_test" "fail" {
