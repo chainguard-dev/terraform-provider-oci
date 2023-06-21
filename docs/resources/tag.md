@@ -24,5 +24,3 @@ Tag an existing image by digest.
 
 - `id` (String) The resulting fully-qualified image ref by digest (e.g. {repo}:tag@sha256:deadbeef).
 - `tagged_ref` (String) The resulting fully-qualified image ref by digest (e.g. {repo}:tag@sha256:deadbeef).
-
-

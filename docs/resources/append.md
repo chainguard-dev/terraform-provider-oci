@@ -47,5 +47,3 @@ Required:
 Required:
 
 - `contents` (String) Content of the file.
-
-
