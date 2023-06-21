@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"time"
@@ -11,10 +12,12 @@ import (
 	"github.com/chainguard-dev/terraform-provider-oci/pkg/validators"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
@@ -36,11 +39,17 @@ type ExecTestDataSourceModel struct {
 	Script         types.String `tfsdk:"script"`
 	TimeoutSeconds types.Int64  `tfsdk:"timeout_seconds"`
 	WorkingDir     types.String `tfsdk:"working_dir"`
+	Env            []EnvVar     `tfsdk:"env"`
 
 	ExitCode  types.Int64  `tfsdk:"exit_code"`
 	Output    types.String `tfsdk:"output"`
 	Id        types.String `tfsdk:"id"`
 	TestedRef types.String `tfsdk:"tested_ref"`
+}
+
+type EnvVar struct {
+	Name  string `tfsdk:"name"`
+	Value string `tfsdk:"value"`
 }
 
 func (d *ExecTestDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -69,6 +78,16 @@ func (d *ExecTestDataSource) Schema(ctx context.Context, req datasource.SchemaRe
 			},
 			"working_dir": schema.StringAttribute{
 				MarkdownDescription: "Working directory for the test",
+				Optional:            true,
+			},
+			"env": schema.ListAttribute{
+				ElementType: basetypes.ObjectType{
+					AttrTypes: map[string]attr.Type{
+						"name":  basetypes.StringType{},
+						"value": basetypes.StringType{},
+					},
+				},
+				MarkdownDescription: "Environment variables for the test",
 				Optional:            true,
 			},
 
@@ -137,14 +156,32 @@ func (d *ExecTestDataSource) Read(ctx context.Context, req datasource.ReadReques
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
 	defer cancel()
 
+	// Prepopulate some environment variables:
+	// - any environment variables defined on the host
+	// - IMAGE_NAME: the fully qualified image name
+	// - IMAGE_REPOSITORY: the repository part of the image name
+	// - IMAGE_REGISTRY: the registry part of the image name
+	// - FREE_PORT: a free port on the host
+	// - any environment variables defined in the data source
 	repo := ref.Context().RepositoryStr()
 	registry := ref.Context().RegistryStr()
-	cmd := exec.CommandContext(ctx, "sh", "-c", data.Script.ValueString())
-	cmd.Env = append(os.Environ(),
+	env := append(os.Environ(),
 		"IMAGE_NAME="+data.Digest.ValueString(),
 		"IMAGE_REPOSITORY="+repo,
 		"IMAGE_REGISTRY="+registry,
 	)
+	fp, err := freePort()
+	if err != nil {
+		resp.Diagnostics.AddError("Unable to find free port", fmt.Sprintf("Unable to find free port for ref %s, got error: %s", data.Digest.ValueString(), err))
+		return
+	}
+	env = append(env, fmt.Sprintf("FREE_PORT=%d", fp))
+	for _, e := range data.Env {
+		env = append(env, fmt.Sprintf("%s=%s", e.Name, e.Value))
+	}
+
+	cmd := exec.CommandContext(ctx, "sh", "-c", data.Script.ValueString())
+	cmd.Env = env
 	cmd.Dir = data.WorkingDir.ValueString()
 	out, err := cmd.CombinedOutput()
 	if len(out) > 1024 {
@@ -180,4 +217,22 @@ func (positiveIntValidator) ValidateInt64(ctx context.Context, req validator.Int
 	if i := req.ConfigValue.ValueInt64(); i < 0 {
 		resp.Diagnostics.AddAttributeError(req.Path, fmt.Sprintf("value %d must be a positive integer", i), "")
 	}
+}
+
+func freePort() (int, error) {
+	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
+	if err != nil {
+		return 0, err
+	}
+
+	l, err := net.ListenTCP("tcp", addr)
+	if err != nil {
+		return 0, err
+	}
+	defer l.Close()
+	ta, ok := l.Addr().(*net.TCPAddr)
+	if !ok {
+		return 0, fmt.Errorf("failed to get port")
+	}
+	return ta.Port, nil
 }
