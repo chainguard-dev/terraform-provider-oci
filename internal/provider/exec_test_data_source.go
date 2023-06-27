@@ -183,21 +183,24 @@ func (d *ExecTestDataSource) Read(ctx context.Context, req datasource.ReadReques
 	cmd := exec.CommandContext(ctx, "sh", "-c", data.Script.ValueString())
 	cmd.Env = env
 	cmd.Dir = data.WorkingDir.ValueString()
-	out, err := cmd.CombinedOutput()
-	if len(out) > 1024 {
-		out = out[len(out)-1024:] // trim output to the last 1KB
+	fullout, err := cmd.CombinedOutput()
+	if len(fullout) > 1024 {
+		// trim output to the last 1KB
+		trimmedout := fullout[len(fullout)-1024:]
+		data.Output = types.StringValue(string(trimmedout))
+	} else {
+		data.Output = types.StringValue(string(fullout))
 	}
 
 	data.TestedRef = data.Digest
 	data.Id = data.Digest
 	data.ExitCode = types.Int64Value(int64(cmd.ProcessState.ExitCode()))
-	data.Output = types.StringValue(string(out))
 
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		resp.Diagnostics.AddError("Test timed out", fmt.Sprintf("Test for ref %s timed out after %d seconds", data.Digest.ValueString(), timeout))
 		return
 	} else if err != nil {
-		resp.Diagnostics.AddError("Test failed", fmt.Sprintf("Test failed for ref %s, got error: %s\n%s", data.Digest.ValueString(), err, string(out)))
+		resp.Diagnostics.AddError("Test failed", fmt.Sprintf("Test failed for ref %s, got error: %s\n%s", data.Digest.ValueString(), err, string(fullout)))
 		return
 	}
 
