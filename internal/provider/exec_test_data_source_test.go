@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"testing"
@@ -10,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
 
 func TestAccExecTestDataSource(t *testing.T) {
@@ -106,4 +108,58 @@ func TestAccExecTestDataSource(t *testing.T) {
 		}},
 	})
 
+}
+
+func TestAccExecTestDataSource_FreePort(t *testing.T) {
+	img, err := remote.Image(name.MustParseReference("cgr.dev/chainguard/wolfi-base:latest"))
+	if err != nil {
+		t.Fatalf("failed to fetch image: %v", err)
+	}
+	d, err := img.Digest()
+	if err != nil {
+		t.Fatalf("failed to get image digest: %v", err)
+	}
+
+	// Test that we can spin up a bunch of parallel tasks that each get
+	// a unique free port, even if they don't run anything on that port.
+	cfg := ""
+	checks := []resource.TestCheckFunc{}
+	num := 10
+	for i := 0; i < num; i++ {
+		cfg += fmt.Sprintf(`data "oci_exec_test" "freeport-%d" {
+  digest = "cgr.dev/chainguard/wolfi-base@%s"
+  script = "docker run --rm $${IMAGE_NAME} echo $${FREE_PORT}"
+}
+`, i, d.String())
+		checks = append(checks,
+			resource.TestCheckResourceAttr(fmt.Sprintf("data.oci_exec_test.freeport-%d", i), "digest", fmt.Sprintf("cgr.dev/chainguard/wolfi-base@%s", d.String())),
+			resource.TestCheckResourceAttr(fmt.Sprintf("data.oci_exec_test.freeport-%d", i), "id", fmt.Sprintf("cgr.dev/chainguard/wolfi-base@%s", d.String())),
+			resource.TestMatchResourceAttr(fmt.Sprintf("data.oci_exec_test.freeport-%d", i), "output", regexp.MustCompile("[0-9]+\n")),
+		)
+	}
+
+	checks = append(checks,
+		resource.TestCheckFunc(func(s *terraform.State) error {
+			// Make sure we got a unique port for each task.
+			var errs []error
+			ports := map[string]int{}
+			for i := 0; i < num; i++ {
+				port := s.RootModule().Resources[fmt.Sprintf("data.oci_exec_test.freeport-%d", i)].Primary.Attributes["output"]
+				if _, found := ports[port]; found {
+					errs = append(errs, fmt.Errorf("port %s was not unique (conflicted in %d and %d)", port, ports[port], i))
+				}
+				ports[port] = i
+			}
+			return errors.Join(errs...)
+		}),
+	)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{{
+			Config: cfg,
+			Check:  resource.ComposeAggregateTestCheckFunc(checks...),
+		}},
+	})
 }
