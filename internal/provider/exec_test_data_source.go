@@ -197,7 +197,7 @@ func (d *ExecTestDataSource) Read(ctx context.Context, req datasource.ReadReques
 	data.ExitCode = types.Int64Value(int64(cmd.ProcessState.ExitCode()))
 
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		resp.Diagnostics.AddError("Test timed out", fmt.Sprintf("Test for ref %s timed out after %d seconds", data.Digest.ValueString(), timeout))
+		resp.Diagnostics.AddError("Test timed out", fmt.Sprintf("Test for ref %s timed out after %d seconds:\n%s", data.Digest.ValueString(), timeout, string(fullout)))
 		return
 	} else if err != nil {
 		resp.Diagnostics.AddError("Test failed", fmt.Sprintf("Test failed for ref %s, got error: %s\n%s", data.Digest.ValueString(), err, string(fullout)))
