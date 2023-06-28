@@ -67,7 +67,7 @@ func (d *StringDataSource) Schema(ctx context.Context, req datasource.SchemaRequ
 				Computed:            true,
 			},
 			"pseudo_tag": schema.StringAttribute{
-				MarkdownDescription: "A psuedo tag pinned to a digest that can be used in place of a real tag. This is useful for cases where a tag is not provided, but is required for compatibility reasons. For example: `unused@sha256:...`. The tag always has the value `unused`, and the digest is the same as the input digest.",
+				MarkdownDescription: "A pseudo tag pinned to a digest that can be used in place of a real tag. This is useful for cases where a tag is not provided, but is required for compatibility reasons. For example: `unused@sha256:...`. The tag always has the value `unused`, and the digest is the same as the input digest.",
 				Computed:            true,
 			},
 		},
