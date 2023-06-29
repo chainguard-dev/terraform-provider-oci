@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"sync"
 	"time"
 
 	"github.com/chainguard-dev/terraform-provider-oci/pkg/validators"
@@ -175,6 +176,7 @@ func (d *ExecTestDataSource) Read(ctx context.Context, req datasource.ReadReques
 		resp.Diagnostics.AddError("Unable to find free port", fmt.Sprintf("Unable to find free port for ref %s, got error: %s", data.Digest.ValueString(), err))
 		return
 	}
+	defer discardPort(fp)
 	env = append(env, fmt.Sprintf("FREE_PORT=%d", fp))
 	for _, e := range data.Env {
 		env = append(env, fmt.Sprintf("%s=%s", e.Name, e.Value))
@@ -222,20 +224,38 @@ func (positiveIntValidator) ValidateInt64(ctx context.Context, req validator.Int
 	}
 }
 
-func freePort() (int, error) {
-	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
-	if err != nil {
-		return 0, err
-	}
+var mu sync.Mutex
+var freePorts = map[int]bool{}
 
-	l, err := net.ListenTCP("tcp", addr)
-	if err != nil {
-		return 0, err
+func freePort() (int, error) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	for {
+		addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
+		if err != nil {
+			return 0, err
+		}
+
+		l, err := net.ListenTCP("tcp", addr)
+		if err != nil {
+			return 0, err
+		}
+		defer l.Close()
+		ta, ok := l.Addr().(*net.TCPAddr)
+		if !ok {
+			return 0, fmt.Errorf("failed to get port")
+		}
+		if freePorts[ta.Port] {
+			tflog.Debug(context.Background(), "port already in use, trying again", map[string]interface{}{"port": ta.Port})
+			continue
+		}
+		return ta.Port, nil
 	}
-	defer l.Close()
-	ta, ok := l.Addr().(*net.TCPAddr)
-	if !ok {
-		return 0, fmt.Errorf("failed to get port")
-	}
-	return ta.Port, nil
+}
+
+func discardPort(port int) {
+	mu.Lock()
+	defer mu.Unlock()
+	delete(freePorts, port)
 }
