@@ -66,10 +66,25 @@ type File struct {
 }
 
 func (f FilesCondition) Check(i v1.Image) error {
-	rc := mutate.Extract(i)
+	ls, err := i.Layers()
+	if err != nil {
+		return err
+	}
+	var rc io.ReadCloser
+	// If there's only one layer, we don't need to extract it.
+	if len(ls) == 1 {
+		rc, err = ls[0].Uncompressed()
+		if err != nil {
+			return err
+		}
+	} else {
+		rc = mutate.Extract(i)
+	}
+
 	defer rc.Close()
 	tr := tar.NewReader(rc)
 	errs := []error{}
+L:
 	for {
 		hdr, err := tr.Next()
 		if err == io.EOF {
@@ -100,6 +115,17 @@ func (f FilesCondition) Check(i v1.Image) error {
 			Regex: f.Want[hdr.Name].Regex,
 			ran:   true,
 		}
+
+		// If all the checks have run, we can stop early.
+		// This might not be strictly correct, since tar files can have multiple
+		// files with the same name, and the last one wins; in practice, this is
+		// unlikely to be a problem, and the optimization is worth it.
+		for _, f := range f.Want {
+			if !f.ran {
+				continue L
+			}
+		}
+		break
 	}
 	for path, f := range f.Want {
 		if !f.ran {
