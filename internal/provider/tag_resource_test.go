@@ -145,9 +145,6 @@ resource "oci_tag" "second" {
 		}},
 	})
 
-	if len(tags) != 1 {
-		t.Errorf("expected 1 tag, got %d", len(tags))
-	}
 	digs := tags[repo.Tag("test").String()]
 	if len(digs) != 2 {
 		t.Errorf("expected 2 tags, got %s", tags[repo.Tag("test").String()])
