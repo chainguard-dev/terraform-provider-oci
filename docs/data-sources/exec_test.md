@@ -30,7 +30,7 @@ Exec test data source
 
 - `exit_code` (Number) Exit code of the test
 - `id` (String) Fully qualified image digest of the image.
-- `output` (String) Output of the test
+- `output` (String, Deprecated) Output of the test
 - `tested_ref` (String) Tested image ref by digest.
 
 <a id="nestedatt--env"></a>
