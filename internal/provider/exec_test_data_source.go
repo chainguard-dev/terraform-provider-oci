@@ -101,6 +101,7 @@ func (d *ExecTestDataSource) Schema(ctx context.Context, req datasource.SchemaRe
 			"output": schema.StringAttribute{
 				MarkdownDescription: "Output of the test",
 				Computed:            true,
+				DeprecationMessage:  "Not populated",
 			},
 			"id": schema.StringAttribute{
 				MarkdownDescription: "Fully qualified image digest of the image.",
@@ -186,13 +187,7 @@ func (d *ExecTestDataSource) Read(ctx context.Context, req datasource.ReadReques
 	cmd.Env = env
 	cmd.Dir = data.WorkingDir.ValueString()
 	fullout, err := cmd.CombinedOutput()
-	if len(fullout) > 1024 {
-		// trim output to the last 1KB
-		trimmedout := fullout[len(fullout)-1024:]
-		data.Output = types.StringValue(string(trimmedout))
-	} else {
-		data.Output = types.StringValue(string(fullout))
-	}
+	data.Output = types.StringValue("") // always empty.
 
 	data.TestedRef = data.Digest
 	data.Id = data.Digest

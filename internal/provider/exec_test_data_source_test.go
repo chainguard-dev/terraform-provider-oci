@@ -1,7 +1,6 @@
 package provider
 
 import (
-	"errors"
 	"fmt"
 	"regexp"
 	"testing"
@@ -11,7 +10,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
-	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
 
 func TestAccExecTestDataSource(t *testing.T) {
@@ -37,7 +35,7 @@ func TestAccExecTestDataSource(t *testing.T) {
 				resource.TestCheckResourceAttr("data.oci_exec_test.test", "digest", fmt.Sprintf("cgr.dev/chainguard/wolfi-base@%s", d.String())),
 				resource.TestCheckResourceAttr("data.oci_exec_test.test", "id", fmt.Sprintf("cgr.dev/chainguard/wolfi-base@%s", d.String())),
 				resource.TestCheckResourceAttr("data.oci_exec_test.test", "exit_code", "0"),
-				resource.TestMatchResourceAttr("data.oci_exec_test.test", "output", regexp.MustCompile("hello\n")),
+				resource.TestCheckResourceAttr("data.oci_exec_test.test", "output", ""),
 			),
 		}, {
 			Config: fmt.Sprintf(`data "oci_exec_test" "env" {
@@ -58,7 +56,7 @@ func TestAccExecTestDataSource(t *testing.T) {
 				resource.TestCheckResourceAttr("data.oci_exec_test.env", "digest", fmt.Sprintf("cgr.dev/chainguard/wolfi-base@%s", d.String())),
 				resource.TestCheckResourceAttr("data.oci_exec_test.env", "id", fmt.Sprintf("cgr.dev/chainguard/wolfi-base@%s", d.String())),
 				resource.TestCheckResourceAttr("data.oci_exec_test.env", "exit_code", "0"),
-				resource.TestMatchResourceAttr("data.oci_exec_test.env", "output", regexp.MustCompile(fmt.Sprintf("IMAGE_NAME=cgr.dev/chainguard/wolfi-base@%s IMAGE_REPOSITORY=chainguard/wolfi-base IMAGE_REGISTRY=cgr.dev FOO=bar BAR=baz FREE_PORT=[0-9]+\n", d.String()))),
+				resource.TestCheckResourceAttr("data.oci_exec_test.env", "output", ""),
 			),
 		}, {
 			Config: fmt.Sprintf(`data "oci_exec_test" "fail" {
@@ -87,7 +85,7 @@ func TestAccExecTestDataSource(t *testing.T) {
 				resource.TestCheckResourceAttr("data.oci_exec_test.working_dir", "digest", fmt.Sprintf("cgr.dev/chainguard/wolfi-base@%s", d.String())),
 				resource.TestCheckResourceAttr("data.oci_exec_test.working_dir", "id", fmt.Sprintf("cgr.dev/chainguard/wolfi-base@%s", d.String())),
 				resource.TestCheckResourceAttr("data.oci_exec_test.working_dir", "exit_code", "0"),
-				resource.TestCheckResourceAttr("data.oci_exec_test.working_dir", "output", "# Terraform Provider for OCI operations\n"),
+				resource.TestCheckResourceAttr("data.oci_exec_test.working_dir", "output", ""),
 			),
 		}},
 	})
@@ -134,25 +132,8 @@ func TestAccExecTestDataSource_FreePort(t *testing.T) {
 		checks = append(checks,
 			resource.TestCheckResourceAttr(fmt.Sprintf("data.oci_exec_test.freeport-%d", i), "digest", fmt.Sprintf("cgr.dev/chainguard/wolfi-base@%s", d.String())),
 			resource.TestCheckResourceAttr(fmt.Sprintf("data.oci_exec_test.freeport-%d", i), "id", fmt.Sprintf("cgr.dev/chainguard/wolfi-base@%s", d.String())),
-			resource.TestMatchResourceAttr(fmt.Sprintf("data.oci_exec_test.freeport-%d", i), "output", regexp.MustCompile("[0-9]+\n")),
 		)
 	}
-
-	checks = append(checks,
-		resource.TestCheckFunc(func(s *terraform.State) error {
-			// Make sure we got a unique port for each task.
-			var errs []error
-			ports := map[string]int{}
-			for i := 0; i < num; i++ {
-				port := s.RootModule().Resources[fmt.Sprintf("data.oci_exec_test.freeport-%d", i)].Primary.Attributes["output"]
-				if _, found := ports[port]; found {
-					errs = append(errs, fmt.Errorf("port %s was not unique (conflicted in %d and %d)", port, ports[port], i))
-				}
-				ports[port] = i
-			}
-			return errors.Join(errs...)
-		}),
-	)
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
