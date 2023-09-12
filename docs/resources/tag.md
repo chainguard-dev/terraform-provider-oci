@@ -18,7 +18,11 @@ Tag an existing image by digest.
 ### Required
 
 - `digest_ref` (String) Image ref by digest to apply the tag to.
-- `tag` (String) Tag to apply to the image.
+
+### Optional
+
+- `tag` (String, Deprecated) Tag to apply to the image.
+- `tags` (List of String) Tags to apply to the image.
 
 ### Read-Only
 
