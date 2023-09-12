@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/chainguard-dev/terraform-provider-oci/pkg/validators"
@@ -10,10 +11,12 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 )
 
 var _ resource.Resource = &TagResource{}
@@ -35,6 +38,7 @@ type TagResourceModel struct {
 
 	DigestRef types.String `tfsdk:"digest_ref"`
 	Tag       types.String `tfsdk:"tag"`
+	Tags      []string     `tfsdk:"tags"`
 }
 
 func (r *TagResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -53,11 +57,18 @@ func (r *TagResource) Schema(ctx context.Context, req resource.SchemaRequest, re
 			},
 			"tag": schema.StringAttribute{
 				MarkdownDescription: "Tag to apply to the image.",
-				Required:            true,
+				Optional:            true,
 				Validators:          []validator.String{validators.TagValidator{}},
 				PlanModifiers:       []planmodifier.String{stringplanmodifier.RequiresReplace()},
+				DeprecationMessage:  "The `tag` attribute is deprecated. Use `tags` instead.",
 			},
-
+			"tags": schema.ListAttribute{
+				MarkdownDescription: "Tags to apply to the image.",
+				// TODO: make this required after tag deprecation period.
+				Optional:      true,
+				ElementType:   basetypes.StringType{},
+				PlanModifiers: []planmodifier.List{listplanmodifier.RequiresReplace()},
+			},
 			"tagged_ref": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "The resulting fully-qualified image ref by digest (e.g. {repo}:tag@sha256:deadbeef).",
@@ -113,8 +124,8 @@ func (r *TagResource) Read(ctx context.Context, req resource.ReadRequest, resp *
 		return
 	}
 
-	// Don't actually tag, but check whether the digest is already tagged so we get a useful diff.
-	// If the digest is already tagged, we'll set the ID and tagged_ref to the correct output value.
+	// Don't actually tag, but check whether the digest is already tagged with all requested tags, so we get a useful diff.
+	// If the digest is already tagged with all requested tags, we'll set the ID and tagged_ref to the correct output value.
 	// Otherwise, we'll set them to empty strings so that the create will run when applied.
 
 	d, err := name.NewDigest(data.DigestRef.ValueString())
@@ -123,21 +134,37 @@ func (r *TagResource) Read(ctx context.Context, req resource.ReadRequest, resp *
 		return
 	}
 
-	t := d.Context().Tag(data.Tag.ValueString())
-	desc, err := remote.Get(t, r.popts.withContext(ctx)...)
-	if err != nil {
-		resp.Diagnostics.AddError("Tag Error", fmt.Sprintf("Error getting image: %s", err.Error()))
-		return
+	tags := []string{}
+	if data.Tag.ValueString() != "" {
+		tags = append(tags, data.Tag.ValueString())
+	} else if len(data.Tags) > 0 {
+		tags = data.Tags
+	} else {
+		resp.Diagnostics.AddError("Tag Error", "either tag or tags must be set")
+	}
+	if data.Tag.ValueString() != "" && len(data.Tags) > 0 {
+		resp.Diagnostics.AddError("Tag Error", "only one of tag or tags may be set")
+	}
+	for _, tag := range tags {
+		t := d.Context().Tag(tag)
+		desc, err := remote.Get(t, r.popts.withContext(ctx)...)
+		if err != nil {
+			// Failed to get the image by tag, so we need to create.
+			return
+		}
+
+		// Some tag is wrong, so we need to create.
+		if desc.Digest.String() != d.DigestStr() {
+			data.Id = types.StringValue("")
+			data.TaggedRef = types.StringValue("")
+			break
+		}
 	}
 
-	if desc.Digest.String() != d.DigestStr() {
-		data.Id = types.StringValue("")
-		data.TaggedRef = types.StringValue("")
-	} else {
-		id := fmt.Sprintf("%s@%s", t.Name(), desc.Digest.String())
-		data.Id = types.StringValue(id)
-		data.TaggedRef = types.StringValue(id)
-	}
+	// All tags are correct so we can set the ID and tagged_ref to the correct output value.
+	id := fmt.Sprintf("%s@%s", d.Context().Tag(tags[0]), d.DigestStr())
+	data.Id = types.StringValue(id)
+	data.TaggedRef = types.StringValue(id)
 
 	// Save updated data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -171,21 +198,42 @@ func (r *TagResource) ImportState(ctx context.Context, req resource.ImportStateR
 }
 
 func (r *TagResource) doTag(ctx context.Context, data *TagResourceModel) (string, error) {
+	var tags []string
+	if data.Tag.ValueString() != "" {
+		tags = append(tags, data.Tag.ValueString())
+	} else if len(data.Tags) > 0 {
+		tags = data.Tags
+	} else {
+		return "", errors.New("either tag or tags must be set")
+	}
+	if data.Tag.ValueString() != "" && len(data.Tags) > 0 {
+		return "", errors.New("only one of tag or tags may be set")
+	}
+
 	d, err := name.NewDigest(data.DigestRef.ValueString())
 	if err != nil {
 		return "", fmt.Errorf("digest_ref must be a digest reference: %v", err)
 	}
-	t := d.Context().Tag(data.Tag.ValueString())
-	if err != nil {
-		return "", fmt.Errorf("error parsing tag: %v", err)
-	}
+
 	desc, err := remote.Get(d, r.popts.withContext(ctx)...)
 	if err != nil {
 		return "", fmt.Errorf("error fetching digest: %v", err)
 	}
-	if err := remote.Tag(t, desc, r.popts.withContext(ctx)...); err != nil {
-		return "", fmt.Errorf("error tagging digest: %v", err)
+
+	for _, tag := range tags {
+		t := d.Context().Tag(tag)
+		if err != nil {
+			return "", fmt.Errorf("error parsing tag %q: %v", tag, err)
+		}
+		if err := remote.Tag(t, desc, r.popts.withContext(ctx)...); err != nil {
+			return "", fmt.Errorf("error tagging digest with %q: %v", tag, err)
+		}
 	}
-	digest := fmt.Sprintf("%s@%s", t.Name(), desc.Digest.String())
+
+	t := d.Context().Tag(tags[0])
+	if err != nil {
+		return "", fmt.Errorf("error parsing tag: %v", err)
+	}
+	digest := fmt.Sprintf("%s@%s", t.Name(), d.DigestStr())
 	return digest, nil
 }
