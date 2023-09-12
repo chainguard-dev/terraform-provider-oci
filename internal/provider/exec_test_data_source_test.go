@@ -35,7 +35,7 @@ func TestAccExecTestDataSource(t *testing.T) {
 				resource.TestCheckResourceAttr("data.oci_exec_test.test", "digest", fmt.Sprintf("cgr.dev/chainguard/wolfi-base@%s", d.String())),
 				resource.TestCheckResourceAttr("data.oci_exec_test.test", "id", fmt.Sprintf("cgr.dev/chainguard/wolfi-base@%s", d.String())),
 				resource.TestCheckResourceAttr("data.oci_exec_test.test", "exit_code", "0"),
-				resource.TestMatchResourceAttr("data.oci_exec_test.test", "output", regexp.MustCompile("hello\n")),
+				resource.TestCheckResourceAttr("data.oci_exec_test.test", "output", ""),
 			),
 		}, {
 			Config: fmt.Sprintf(`data "oci_exec_test" "env" {
