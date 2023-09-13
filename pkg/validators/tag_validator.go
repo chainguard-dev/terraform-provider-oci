@@ -10,7 +10,7 @@ import (
 // TagValidator is a string validator that checks that the string is valid OCI reference by digest.
 type TagValidator struct{}
 
-var _ validator.String = DigestValidator{}
+var _ validator.String = TagValidator{}
 
 func (v TagValidator) Description(context.Context) string {
 	return `value must be a valid OCI tag element (e.g., "latest", "v1.2.3")`

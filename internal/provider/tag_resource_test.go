@@ -135,4 +135,19 @@ func TestAccTagResource(t *testing.T) {
 		}
 	}
 
+	// Tag the digest with the same tag multiple times, which should be allowed but warn.
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{{
+			Config: fmt.Sprintf(`resource "oci_tag" "test" {
+					  digest_ref = %q
+					  tags       = ["foo", "foo", "foo", "bar", "bar", "bar"]
+					}`, dig2),
+			Check: resource.ComposeAggregateTestCheckFunc(
+				resource.TestCheckResourceAttr("oci_tag.test", "tagged_ref", want2),
+				resource.TestCheckResourceAttr("oci_tag.test", "id", want2),
+			),
+		}},
+	})
 }

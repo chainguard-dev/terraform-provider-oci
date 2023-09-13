@@ -17,6 +17,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
+	"golang.org/x/sync/errgroup"
 )
 
 var _ resource.Resource = &TagResource{}
@@ -67,6 +68,7 @@ func (r *TagResource) Schema(ctx context.Context, req resource.SchemaRequest, re
 				// TODO: make this required after tag deprecation period.
 				Optional:      true,
 				ElementType:   basetypes.StringType{},
+				Validators:    []validator.List{uniqueTagsValidator{}},
 				PlanModifiers: []planmodifier.List{listplanmodifier.RequiresReplace()},
 			},
 			"tagged_ref": schema.StringAttribute{
@@ -220,14 +222,22 @@ func (r *TagResource) doTag(ctx context.Context, data *TagResourceModel) (string
 		return "", fmt.Errorf("error fetching digest: %v", err)
 	}
 
+	errg, ctx := errgroup.WithContext(ctx)
 	for _, tag := range tags {
-		t := d.Context().Tag(tag)
-		if err != nil {
-			return "", fmt.Errorf("error parsing tag %q: %v", tag, err)
-		}
-		if err := remote.Tag(t, desc, r.popts.withContext(ctx)...); err != nil {
-			return "", fmt.Errorf("error tagging digest with %q: %v", tag, err)
-		}
+		tag := tag
+		errg.Go(func() error {
+			t := d.Context().Tag(tag)
+			if err != nil {
+				return fmt.Errorf("error parsing tag %q: %v", tag, err)
+			}
+			if err := remote.Tag(t, desc, r.popts.withContext(ctx)...); err != nil {
+				return fmt.Errorf("error tagging digest with %q: %v", tag, err)
+			}
+			return nil
+		})
+	}
+	if err := errg.Wait(); err != nil {
+		return "", err
 	}
 
 	t := d.Context().Tag(tags[0])
@@ -236,4 +246,37 @@ func (r *TagResource) doTag(ctx context.Context, data *TagResourceModel) (string
 	}
 	digest := fmt.Sprintf("%s@%s", t.Name(), d.DigestStr())
 	return digest, nil
+}
+
+type uniqueTagsValidator struct{}
+
+var _ validator.List = uniqueTagsValidator{}
+
+func (v uniqueTagsValidator) Description(context.Context) string {
+	return `value must be valid OCI tag elements (e.g., "latest", "v1.2.3")`
+}
+func (v uniqueTagsValidator) MarkdownDescription(ctx context.Context) string {
+	return v.Description(ctx)
+}
+
+func (v uniqueTagsValidator) ValidateList(ctx context.Context, req validator.ListRequest, resp *validator.ListResponse) {
+	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
+		return
+	}
+	var tags []string
+	if diag := req.ConfigValue.ElementsAs(ctx, &tags, false); diag.HasError() {
+		resp.Diagnostics.Append(diag...)
+		return
+	}
+
+	seen := map[string]bool{}
+	for _, t := range tags {
+		if seen[t] {
+			resp.Diagnostics.AddWarning("Duplicate tag", fmt.Sprintf("duplicate tag %q", t))
+		}
+		seen[t] = true
+		if _, err := name.NewTag("example.com:" + t); err != nil {
+			resp.Diagnostics.AddError("Invalid OCI tag name", fmt.Sprintf("parsing tag %q: %v", t, err))
+		}
+	}
 }
