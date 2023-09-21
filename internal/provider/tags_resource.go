@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 
