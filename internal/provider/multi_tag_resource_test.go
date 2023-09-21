@@ -12,7 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
-func TestAccMultiTagResource(t *testing.T) {
+func TestAccTagsResource(t *testing.T) {
 	repo, cleanup := ocitesting.SetupRepository(t, "repo")
 	defer cleanup()
 
@@ -60,7 +60,7 @@ func TestAccMultiTagResource(t *testing.T) {
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{{
-			Config: fmt.Sprintf(`resource "oci_multi_tag" "test" {
+			Config: fmt.Sprintf(`resource "oci_tags" "test" {
 				  tags       = %s
 			}`, marshal(map[string]string{
 				repo.Tag("foo").String():   dig1.DigestStr(),
@@ -100,7 +100,7 @@ func TestAccMultiTagResource(t *testing.T) {
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{{
-			Config: fmt.Sprintf(`resource "oci_multi_tag" "test" {
+			Config: fmt.Sprintf(`resource "oci_tags" "test" {
 				  tags       = %s
 			}`, marshal(map[string]string{
 				// "foo" isn't specified, but this doesn't untag it.

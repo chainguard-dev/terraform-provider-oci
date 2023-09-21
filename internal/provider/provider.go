@@ -97,7 +97,7 @@ func (p *OCIProvider) Resources(ctx context.Context) []func() resource.Resource 
 	return []func() resource.Resource{
 		NewAppendResource,
 		NewTagResource,
-		NewMultiTagResource,
+		NewTagsResource,
 	}
 }
 

@@ -18,30 +18,30 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 )
 
-var _ resource.Resource = &MultiTagResource{}
-var _ resource.ResourceWithImportState = &MultiTagResource{}
+var _ resource.Resource = &TagsResource{}
+var _ resource.ResourceWithImportState = &TagsResource{}
 
-func NewMultiTagResource() resource.Resource {
-	return &MultiTagResource{}
+func NewTagsResource() resource.Resource {
+	return &TagsResource{}
 }
 
-// MultiTagResource defines the resource implementation.
-type MultiTagResource struct {
+// TagsResource defines the resource implementation.
+type TagsResource struct {
 	popts ProviderOpts
 }
 
-// MultiTagResourceModel describes the resource data model.
-type MultiTagResourceModel struct {
+// TagsResourceModel describes the resource data model.
+type TagsResourceModel struct {
 	Id types.String `tfsdk:"id"`
 
 	Tags map[string]string `tfsdk:"tags"` // ref by tag -> digest
 }
 
-func (r *MultiTagResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_multi_tag"
+func (r *TagsResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_tags"
 }
 
-func (r *MultiTagResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (r *TagsResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "Tag many digests with many tags.",
 		Attributes: map[string]schema.Attribute{
@@ -64,7 +64,7 @@ func (r *MultiTagResource) Schema(ctx context.Context, req resource.SchemaReques
 	}
 }
 
-func (r *MultiTagResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+func (r *TagsResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	// Prevent panic if the provider has not been configured.
 	if req.ProviderData == nil {
 		return
@@ -78,8 +78,8 @@ func (r *MultiTagResource) Configure(ctx context.Context, req resource.Configure
 	r.popts = *popts
 }
 
-func (r *MultiTagResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var data *MultiTagResourceModel
+func (r *TagsResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	var data *TagsResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -97,8 +97,8 @@ func (r *MultiTagResource) Create(ctx context.Context, req resource.CreateReques
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-func (r *MultiTagResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var data *MultiTagResourceModel
+func (r *TagsResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	var data *TagsResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -118,8 +118,8 @@ func (r *MultiTagResource) Read(ctx context.Context, req resource.ReadRequest, r
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-func (r *MultiTagResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var data *MultiTagResourceModel
+func (r *TagsResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var data *TagsResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -136,15 +136,15 @@ func (r *MultiTagResource) Update(ctx context.Context, req resource.UpdateReques
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-func (r *MultiTagResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	resp.Diagnostics.Append(req.State.Get(ctx, &MultiTagResourceModel{})...)
+func (r *TagsResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	resp.Diagnostics.Append(req.State.Get(ctx, &TagsResourceModel{})...)
 }
 
-func (r *MultiTagResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+func (r *TagsResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
-func (r *MultiTagResource) checkTags(ctx context.Context, data *MultiTagResourceModel) (string, error) {
+func (r *TagsResource) checkTags(ctx context.Context, data *TagsResourceModel) (string, error) {
 	for tag, digest := range data.Tags {
 		t, err := name.NewTag(tag)
 		if err != nil {
@@ -166,7 +166,7 @@ func (r *MultiTagResource) checkTags(ctx context.Context, data *MultiTagResource
 	return fmt.Sprintf("%x", md5.Sum(b)), nil
 }
 
-func (r *MultiTagResource) doTags(ctx context.Context, data *MultiTagResourceModel) (string, error) {
+func (r *TagsResource) doTags(ctx context.Context, data *TagsResourceModel) (string, error) {
 	for tag, digest := range data.Tags {
 		t, err := name.NewTag(tag)
 		if err != nil {
