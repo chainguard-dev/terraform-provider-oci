@@ -2,7 +2,6 @@ package provider
 
 import (
 	"context"
-	"crypto/md5"
 	"encoding/json"
 	"fmt"
 
@@ -158,12 +157,12 @@ func (r *TagsResource) checkTags(ctx context.Context, data *TagsResourceModel) (
 			return "", fmt.Errorf("tag %q does not point to digest %q (got %q)", tag, digest, desc.Digest.String())
 		}
 	}
-	// ID is the MD5 of the JSONified map.
+	// ID is the SHA256 of the JSONified map.
 	b, err := json.Marshal(data.Tags)
 	if err != nil {
 		return "", fmt.Errorf("error marshaling tags: %w", err)
 	}
-	return fmt.Sprintf("%x", md5.Sum(b)), nil
+	return fmt.Sprintf("%x", sha256.Sum(b)), nil
 }
 
 func (r *TagsResource) doTags(ctx context.Context, data *TagsResourceModel) (string, error) {
@@ -182,10 +181,10 @@ func (r *TagsResource) doTags(ctx context.Context, data *TagsResourceModel) (str
 		}
 	}
 
-	// ID is the MD5 of the JSONified map.
+	// ID is the SHA256 of the JSONified map.
 	b, err := json.Marshal(data.Tags)
 	if err != nil {
 		return "", fmt.Errorf("error marshaling tags: %w", err)
 	}
-	return fmt.Sprintf("%x", md5.Sum(b)), nil
+	return fmt.Sprintf("%x", sha256.Sum(b)), nil
 }
