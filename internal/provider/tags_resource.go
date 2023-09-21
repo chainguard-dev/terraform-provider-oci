@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/chainguard-dev/terraform-provider-oci/pkg/validators"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -14,6 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 )
@@ -34,7 +36,8 @@ type TagsResource struct {
 type TagsResourceModel struct {
 	Id types.String `tfsdk:"id"`
 
-	Tags map[string]string `tfsdk:"tags"` // ref by tag -> digest
+	Repo string            `tfsdk:"repo"`
+	Tags map[string]string `tfsdk:"tags"` // tag -> digest
 }
 
 func (r *TagsResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -45,9 +48,15 @@ func (r *TagsResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "Tag many digests with many tags.",
 		Attributes: map[string]schema.Attribute{
+			"repo": schema.StringAttribute{
+				MarkdownDescription: "Repository for the tags.",
+				Required:            true,
+				Validators:          []validator.String{validators.RepoValidator{}},
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.RequiresReplace()},
+			},
 			"tags": schema.MapAttribute{
 				MarkdownDescription: "Map of tag -> digest to apply.",
-				Optional:            true,
+				Required:            true,
 				ElementType:         basetypes.StringType{},
 				// TODO: validator -- check that digests and tags are well formed.
 				PlanModifiers: []planmodifier.Map{mapplanmodifier.RequiresReplace()},
@@ -145,11 +154,13 @@ func (r *TagsResource) ImportState(ctx context.Context, req resource.ImportState
 }
 
 func (r *TagsResource) checkTags(ctx context.Context, data *TagsResourceModel) (string, error) {
+	repo, err := name.NewRepository(data.Repo)
+	if err != nil {
+		return "", fmt.Errorf("error parsing repo ref: %w", err)
+	}
+
 	for tag, digest := range data.Tags {
-		t, err := name.NewTag(tag)
-		if err != nil {
-			return "", fmt.Errorf("error parsing tag ref: %w", err)
-		}
+		t := repo.Tag(tag)
 		desc, err := remote.Head(t, r.popts.withContext(ctx)...)
 		if err != nil {
 			return "", fmt.Errorf("error getting tag %q: %w", t, err)
@@ -163,16 +174,18 @@ func (r *TagsResource) checkTags(ctx context.Context, data *TagsResourceModel) (
 	if err != nil {
 		return "", fmt.Errorf("error marshaling tags: %w", err)
 	}
-	return fmt.Sprintf("%x", sha256.Sum(b)), nil
+	return fmt.Sprintf("%x", sha256.Sum256(b)), nil
 }
 
 func (r *TagsResource) doTags(ctx context.Context, data *TagsResourceModel) (string, error) {
+	repo, err := name.NewRepository(data.Repo)
+	if err != nil {
+		return "", fmt.Errorf("error parsing repo ref: %w", err)
+	}
+
 	for tag, digest := range data.Tags {
-		t, err := name.NewTag(tag)
-		if err != nil {
-			return "", fmt.Errorf("error parsing tag ref: %w", err)
-		}
-		d := t.Context().Digest(digest)
+		t := repo.Tag(tag)
+		d := repo.Digest(digest)
 		desc, err := remote.Get(d, r.popts.withContext(ctx)...)
 		if err != nil {
 			return "", fmt.Errorf("error getting digest %q: %w", digest, err)
@@ -187,5 +200,5 @@ func (r *TagsResource) doTags(ctx context.Context, data *TagsResourceModel) (str
 	if err != nil {
 		return "", fmt.Errorf("error marshaling tags: %w", err)
 	}
-	return fmt.Sprintf("%x", sha256.Sum(b)), nil
+	return fmt.Sprintf("%x", sha256.Sum256(b)), nil
 }

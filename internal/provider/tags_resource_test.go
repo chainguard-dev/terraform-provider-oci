@@ -7,6 +7,7 @@ import (
 
 	ocitesting "github.com/chainguard-dev/terraform-provider-oci/testing"
 	"github.com/google/go-containerregistry/pkg/name"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/random"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -61,13 +62,14 @@ func TestAccTagsResource(t *testing.T) {
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{{
 			Config: fmt.Sprintf(`resource "oci_tags" "test" {
-				  tags       = %s
-			}`, marshal(map[string]string{
-				repo.Tag("foo").String():   dig1.DigestStr(),
-				repo.Tag("bar").String():   dig1.DigestStr(),
-				repo.Tag("baz").String():   dig1.DigestStr(),
-				repo.Tag("hello").String(): dig2.DigestStr(),
-				repo.Tag("world").String(): dig2.DigestStr(),
+				repo = %q
+				tags = %s
+			}`, repo, marshal(map[string]v1.Hash{
+				"foo":   d1,
+				"bar":   d1,
+				"baz":   d1,
+				"hello": d2,
+				"world": d2,
 			})),
 		}},
 	})
@@ -101,15 +103,16 @@ func TestAccTagsResource(t *testing.T) {
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{{
 			Config: fmt.Sprintf(`resource "oci_tags" "test" {
-				  tags       = %s
-			}`, marshal(map[string]string{
+				repo = %q
+				tags = %s
+			}`, repo, marshal(map[string]v1.Hash{
 				// "foo" isn't specified, but this doesn't untag it.
-				repo.Tag("bar").String():     dig1.DigestStr(),
-				repo.Tag("baz").String():     dig1.DigestStr(),
-				repo.Tag("hello").String():   dig1.DigestStr(), // "hello" moved from 2 to 1.
-				repo.Tag("world").String():   dig2.DigestStr(),
-				repo.Tag("goodbye").String(): dig1.DigestStr(), // new tag on 1.
-				repo.Tag("kevin").String():   dig2.DigestStr(), // new tag on 2.
+				"bar":     d1,
+				"baz":     d1,
+				"hello":   d1, // "hello" moved from 2 to 1.
+				"world":   d2,
+				"goodbye": d1, // new tag on 1.
+				"kevin":   d2, // new tag on 2.
 			})),
 		}},
 	})
