@@ -40,7 +40,7 @@ func TestAccTagResource(t *testing.T) {
 	if err := remote.Write(ref2, img2); err != nil {
 		t.Fatalf("failed to write image: %v", err)
 	}
-	d2, err := img1.Digest()
+	d2, err := img2.Digest()
 	if err != nil {
 		t.Fatalf("failed to get digest: %v", err)
 	}
