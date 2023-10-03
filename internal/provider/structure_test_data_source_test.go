@@ -55,13 +55,14 @@ func TestAccStructureTestDataSource(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to mutate image: %v", err)
 	}
-	d, err := img.Digest()
+	idx := mutate.AppendManifests(empty.Index, mutate.IndexAddendum{Add: img})
+	d, err := idx.Digest()
 	if err != nil {
-		t.Fatalf("failed to get image digest: %v", err)
+		t.Fatalf("failed to get index digest: %v", err)
 	}
 	ref := repo.Digest(d.String())
-	if err := remote.Write(ref, img); err != nil {
-		t.Fatalf("failed to write image: %v", err)
+	if err := remote.WriteIndex(ref, idx); err != nil {
+		t.Fatalf("failed to write index: %v", err)
 	}
 
 	resource.Test(t, resource.TestCase{
