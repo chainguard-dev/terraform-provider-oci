@@ -128,7 +128,7 @@ func (d *StructureTestDataSource) Read(ctx context.Context, req datasource.ReadR
 		resp.Diagnostics.AddError("Invalid ref", fmt.Sprintf("Unable to parse ref %s, got error: %s", data.Digest.ValueString(), err))
 		return
 	}
-	// TODO: This should accept a platform, or fail if the ref points to an index.
+
 	desc, err := remote.Get(ref, d.popts.withContext(ctx)...)
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to fetch image", fmt.Sprintf("Unable to fetch image for ref %s, got error: %s", data.Digest.ValueString(), err))
