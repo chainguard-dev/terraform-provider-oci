@@ -7,6 +7,7 @@ import (
 	"github.com/chainguard-dev/terraform-provider-oci/pkg/structure"
 	"github.com/chainguard-dev/terraform-provider-oci/pkg/validators"
 	"github.com/google/go-containerregistry/pkg/name"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -150,10 +151,37 @@ func (d *StructureTestDataSource) Read(ctx context.Context, req datasource.ReadR
 		}
 	}
 
-	img, err := desc.Image()
-	if err != nil {
-		resp.Diagnostics.AddError("Unable to load image", fmt.Sprintf("Unable to load image for ref %s, got error: %s", data.Digest.ValueString(), err))
-		return
+	var img v1.Image
+	switch {
+	case desc.MediaType.IsImage():
+		img, err = desc.Image()
+		if err != nil {
+			resp.Diagnostics.AddError("Unable to fetch image", fmt.Sprintf("Unable to fetch image for ref %s, got error: %s", data.Digest.ValueString(), err))
+			return
+		}
+	case desc.MediaType.IsIndex():
+		index, err := desc.ImageIndex()
+		if err != nil {
+			resp.Diagnostics.AddError("Unable to read image index", fmt.Sprintf("Unable to read image index for ref %s, got error: %s", data.Digest.ValueString(), err))
+			return
+		}
+
+		indexManifest, err := index.IndexManifest()
+		if err != nil {
+			resp.Diagnostics.AddError("Unable to read image index manifest", fmt.Sprintf("Unable to read image index manifest for ref %s, got error: %s", data.Digest.ValueString(), err))
+			return
+		}
+
+		if len(indexManifest.Manifests) == 0 {
+			resp.Diagnostics.AddError("Unable to read image from index manifest", fmt.Sprintf("Unable to read image from index manifest for ref %s: index is empty", data.Digest.ValueString()))
+		}
+
+		firstDescriptor := indexManifest.Manifests[0]
+		img, err = index.Image(firstDescriptor.Digest)
+		if err != nil {
+			resp.Diagnostics.AddError("Unable to load image", fmt.Sprintf("Unable to load image for ref %s, got error: %s", data.Digest.ValueString(), err))
+			return
+		}
 	}
 
 	if err := conds.Check(img); err != nil {
