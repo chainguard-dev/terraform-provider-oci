@@ -141,8 +141,9 @@ func (d *ExecTestDataSource) Read(ctx context.Context, req datasource.ReadReques
 		resp.Diagnostics.AddError("Invalid ref", fmt.Sprintf("Unable to parse ref %s, got error: %s", data.Digest.ValueString(), err))
 		return
 	}
+
 	// Check we can get the image before running the test.
-	if _, err := remote.Image(ref, d.popts.withContext(ctx)...); err != nil {
+	if _, err := remote.Get(ref, d.popts.withContext(ctx)...); err != nil {
 		resp.Diagnostics.AddError("Unable to fetch image", fmt.Sprintf("Unable to fetch image for ref %s, got error: %s", data.Digest.ValueString(), err))
 		return
 	}
