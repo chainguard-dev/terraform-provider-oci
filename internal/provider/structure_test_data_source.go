@@ -128,7 +128,7 @@ func (d *StructureTestDataSource) Read(ctx context.Context, req datasource.ReadR
 		return
 	}
 	// TODO: This should accept a platform, or fail if the ref points to an index.
-	img, err := remote.Image(ref, d.popts.withContext(ctx)...)
+	desc, err := remote.Get(ref, d.popts.withContext(ctx)...)
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to fetch image", fmt.Sprintf("Unable to fetch image for ref %s, got error: %s", data.Digest.ValueString(), err))
 		return
@@ -148,6 +148,12 @@ func (d *StructureTestDataSource) Read(ctx context.Context, req datasource.ReadR
 				},
 			}})
 		}
+	}
+
+	img, err := desc.Image()
+	if err != nil {
+		resp.Diagnostics.AddError("Unable to load image", fmt.Sprintf("Unable to load image for ref %s, got error: %s", data.Digest.ValueString(), err))
+		return
 	}
 
 	if err := conds.Check(img); err != nil {
