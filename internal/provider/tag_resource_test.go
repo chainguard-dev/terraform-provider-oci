@@ -46,7 +46,7 @@ func TestAccTagResource(t *testing.T) {
 	}
 	dig2 := ref2.Context().Digest(d2.String())
 
-	want1 := fmt.Sprintf("%s:test@%s", repo, d2)
+	want1 := fmt.Sprintf("%s:test@%s", repo, d1)
 	want2 := fmt.Sprintf("%s:test2@%s", repo, d2)
 
 	resource.Test(t, resource.TestCase{
