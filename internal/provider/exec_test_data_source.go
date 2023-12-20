@@ -142,6 +142,14 @@ func (d *ExecTestDataSource) Read(ctx context.Context, req datasource.ReadReques
 		return
 	}
 
+	if skip := os.Getenv("TF_OCI_SKIP_EXEC_TEST"); skip == "true" {
+		resp.Diagnostics.AddWarning("Skipping exec test", fmt.Sprintf("Skipping exec test for ref %s", data.Digest.ValueString()))
+		data.TestedRef = data.Digest
+		data.Id = data.Digest
+		resp.Diagnostics.Append(resp.State.Set(ctx, &data)...) // Save data into Terraform state
+		return
+	}
+
 	// Check we can get the image before running the test.
 	if _, err := remote.Get(ref, d.popts.withContext(ctx)...); err != nil {
 		resp.Diagnostics.AddError("Unable to fetch image", fmt.Sprintf("Unable to fetch image for ref %s, got error: %s", data.Digest.ValueString(), err))
