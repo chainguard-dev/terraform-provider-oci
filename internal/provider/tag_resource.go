@@ -3,10 +3,14 @@ package provider
 import (
 	"context"
 	"fmt"
+	"sort"
+	"sync"
 
 	"github.com/chainguard-dev/terraform-provider-oci/pkg/validators"
 	"github.com/google/go-containerregistry/pkg/name"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -93,7 +97,7 @@ func (r *TagResource) Create(ctx context.Context, req resource.CreateRequest, re
 		return
 	}
 
-	digest, err := r.doTag(ctx, data)
+	digest, err := r.doTag(ctx, data, resp.Diagnostics)
 	if err != nil {
 		resp.Diagnostics.AddError("Tag Error", fmt.Sprintf("Error tagging image: %s", err.Error()))
 		return
@@ -150,7 +154,7 @@ func (r *TagResource) Update(ctx context.Context, req resource.UpdateRequest, re
 		return
 	}
 
-	digest, err := r.doTag(ctx, data)
+	digest, err := r.doTag(ctx, data, resp.Diagnostics)
 	if err != nil {
 		resp.Diagnostics.AddError("Tag Error", fmt.Sprintf("Error tagging image: %s", err.Error()))
 		return
@@ -170,7 +174,10 @@ func (r *TagResource) ImportState(ctx context.Context, req resource.ImportStateR
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
-func (r *TagResource) doTag(ctx context.Context, data *TagResourceModel) (string, error) {
+var tagmu sync.Mutex
+var tags = map[string]map[v1.Hash]struct{}{}
+
+func (r *TagResource) doTag(ctx context.Context, data *TagResourceModel, diag diag.Diagnostics) (string, error) {
 	d, err := name.NewDigest(data.DigestRef.ValueString())
 	if err != nil {
 		return "", fmt.Errorf("digest_ref must be a digest reference: %v", err)
@@ -183,6 +190,25 @@ func (r *TagResource) doTag(ctx context.Context, data *TagResourceModel) (string
 	if err != nil {
 		return "", fmt.Errorf("error fetching digest: %v", err)
 	}
+
+	func() {
+		tagmu.Lock()
+		defer tagmu.Unlock()
+		if tags[t.Name()] == nil {
+			tags[t.Name()] = map[v1.Hash]struct{}{}
+		}
+
+		if len(tags[t.Name()]) > 0 {
+			digs := make([]string, 0, len(tags[t.Name()]))
+			for d := range tags[t.Name()] {
+				digs = append(digs, d.String())
+			}
+			sort.Strings(digs)
+			diag.AddWarning("Tag collision", fmt.Sprintf("Image %q was recently tagged with another digest: %s", t.Name(), digs))
+		}
+		tags[t.Name()][desc.Digest] = struct{}{}
+	}()
+
 	if err := remote.Tag(t, desc, r.popts.withContext(ctx)...); err != nil {
 		return "", fmt.Errorf("error tagging digest: %v", err)
 	}
