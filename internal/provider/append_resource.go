@@ -241,18 +241,20 @@ func (r *AppendResource) doAppend(ctx context.Context, data *AppendResourceModel
 	if err != nil {
 		return nil, []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to append layers", fmt.Sprintf("Unable to append layers, got error: %s", err))}
 	}
-	if err := remote.Write(baseref, img, r.popts.withContext(ctx)...); err != nil {
-		return nil, []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to push image", fmt.Sprintf("Unable to push image, got error: %s", err))}
-	}
+
 	dig, err := img.Digest()
 	if err != nil {
 		return nil, []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to get image digest", fmt.Sprintf("Unable to get image digest, got error: %s", err))}
+	}
+
+	d := baseref.Context().Digest(dig.String())
+	if err := remote.Write(d, img, r.popts.withContext(ctx)...); err != nil {
+		return nil, []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to push image", fmt.Sprintf("Unable to push image, got error: %s", err))}
 	}
 
 	// Write logs using the tflog package
 	// Documentation: https://terraform.io/plugin/log
 	tflog.Trace(ctx, "created a resource")
 
-	d := baseref.Context().Digest(dig.String())
 	return &d, []diag.Diagnostic{}
 }
