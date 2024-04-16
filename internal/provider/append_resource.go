@@ -11,7 +11,7 @@ import (
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
-	"github.com/google/go-containerregistry/pkg/v1/static"
+	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	ggcrtypes "github.com/google/go-containerregistry/pkg/v1/types"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -236,8 +236,13 @@ func (r *AppendResource) doAppend(ctx context.Context, data *AppendResourceModel
 			return nil, []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to close gzip writer", fmt.Sprintf("Unable to close gzip writer, got error: %s", err))}
 		}
 
+		l, err := tarball.LayerFromReader(&b)
+		if err != nil {
+			return nil, []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to create layer", fmt.Sprintf("Unable to create layer, got error: %s", err))}
+		}
+
 		adds = append(adds, mutate.Addendum{
-			Layer:     static.NewLayer(b.Bytes(), ggcrtypes.OCILayer),
+			Layer:     l,
 			History:   v1.History{CreatedBy: "terraform-provider-oci: oci_append"},
 			MediaType: ggcrtypes.OCILayer,
 		})
