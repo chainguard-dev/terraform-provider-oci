@@ -3,6 +3,7 @@ package provider
 import (
 	"archive/tar"
 	"bytes"
+	"compress/gzip"
 	"context"
 	"fmt"
 
@@ -10,7 +11,7 @@ import (
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
-	"github.com/google/go-containerregistry/pkg/v1/static"
+	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	ggcrtypes "github.com/google/go-containerregistry/pkg/v1/types"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -214,11 +215,13 @@ func (r *AppendResource) doAppend(ctx context.Context, data *AppendResourceModel
 	adds := []mutate.Addendum{}
 	for _, l := range ls {
 		var b bytes.Buffer
-		tw := tar.NewWriter(&b)
+		zw := gzip.NewWriter(&b)
+		tw := tar.NewWriter(zw)
 		for name, f := range l.Files {
 			if err := tw.WriteHeader(&tar.Header{
 				Name: name,
 				Size: int64(len(f.Contents.ValueString())),
+				Mode: 0644,
 			}); err != nil {
 				return nil, []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to write tar header", fmt.Sprintf("Unable to write tar header for %q, got error: %s", name, err))}
 			}
@@ -229,9 +232,17 @@ func (r *AppendResource) doAppend(ctx context.Context, data *AppendResourceModel
 		if err := tw.Close(); err != nil {
 			return nil, []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to close tar writer", fmt.Sprintf("Unable to close tar writer, got error: %s", err))}
 		}
+		if err := zw.Close(); err != nil {
+			return nil, []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to close gzip writer", fmt.Sprintf("Unable to close gzip writer, got error: %s", err))}
+		}
+
+		l, err := tarball.LayerFromReader(&b)
+		if err != nil {
+			return nil, []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to create layer", fmt.Sprintf("Unable to create layer, got error: %s", err))}
+		}
 
 		adds = append(adds, mutate.Addendum{
-			Layer:     static.NewLayer(b.Bytes(), ggcrtypes.OCILayer),
+			Layer:     l,
 			History:   v1.History{CreatedBy: "terraform-provider-oci: oci_append"},
 			MediaType: ggcrtypes.OCILayer,
 		})
