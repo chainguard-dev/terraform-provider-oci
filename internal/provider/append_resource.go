@@ -3,6 +3,7 @@ package provider
 import (
 	"archive/tar"
 	"bytes"
+	"compress/gzip"
 	"context"
 	"fmt"
 
@@ -214,11 +215,13 @@ func (r *AppendResource) doAppend(ctx context.Context, data *AppendResourceModel
 	adds := []mutate.Addendum{}
 	for _, l := range ls {
 		var b bytes.Buffer
-		tw := tar.NewWriter(&b)
+		zw := gzip.NewWriter(&b)
+		tw := tar.NewWriter(zw)
 		for name, f := range l.Files {
 			if err := tw.WriteHeader(&tar.Header{
 				Name: name,
 				Size: int64(len(f.Contents.ValueString())),
+				Mode: 0644,
 			}); err != nil {
 				return nil, []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to write tar header", fmt.Sprintf("Unable to write tar header for %q, got error: %s", name, err))}
 			}
@@ -228,6 +231,9 @@ func (r *AppendResource) doAppend(ctx context.Context, data *AppendResourceModel
 		}
 		if err := tw.Close(); err != nil {
 			return nil, []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to close tar writer", fmt.Sprintf("Unable to close tar writer, got error: %s", err))}
+		}
+		if err := zw.Close(); err != nil {
+			return nil, []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to close gzip writer", fmt.Sprintf("Unable to close gzip writer, got error: %s", err))}
 		}
 
 		adds = append(adds, mutate.Addendum{

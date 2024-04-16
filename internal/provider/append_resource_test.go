@@ -6,9 +6,12 @@ import (
 	"testing"
 
 	ocitesting "github.com/chainguard-dev/terraform-provider-oci/testing"
+	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/google/go-containerregistry/pkg/v1/random"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/google/go-containerregistry/pkg/v1/validate"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
 
 func TestAccAppendResource(t *testing.T) {
@@ -55,6 +58,17 @@ func TestAccAppendResource(t *testing.T) {
 					resource.TestCheckResourceAttr("oci_append.test", "base_image", ref1.String()),
 					resource.TestMatchResourceAttr("oci_append.test", "image_ref", regexp.MustCompile(`/test@sha256:[0-9a-f]{64}$`)),
 					resource.TestMatchResourceAttr("oci_append.test", "id", regexp.MustCompile(`/test@sha256:[0-9a-f]{64}$`)),
+					resource.TestCheckFunc(func(s *terraform.State) error {
+						rs := s.RootModule().Resources["oci_append.test"]
+						img, err := crane.Pull(rs.Primary.Attributes["image_ref"])
+						if err != nil {
+							return fmt.Errorf("failed to pull image: %v", err)
+						}
+						if err := validate.Image(img); err != nil {
+							return fmt.Errorf("failed to validate image: %v", err)
+						}
+						return nil
+					}),
 				),
 			},
 			// Update and Read testing
