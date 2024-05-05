@@ -57,9 +57,6 @@ func TestAccRefDataSource(t *testing.T) {
 		t.Fatalf("failed to get image digest: %v", err)
 	}
 
-	cf, _ := img.ConfigFile()
-	t.Logf("Image config: %+v", cf) // TODO: remove
-
 	// An image specified by tag has a .tag attribute, and all the other image manifest attributes.
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },

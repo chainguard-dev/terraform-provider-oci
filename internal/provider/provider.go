@@ -114,6 +114,7 @@ func (p *OCIProvider) DataSources(ctx context.Context) []func() datasource.DataS
 func (p *OCIProvider) Functions(ctx context.Context) []func() function.Function {
 	return []func() function.Function{
 		NewParseFunction,
+		NewGetFunction,
 	}
 }
 

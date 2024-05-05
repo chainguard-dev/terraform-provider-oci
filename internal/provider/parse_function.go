@@ -32,7 +32,7 @@ func (s *ParseFunction) Definition(_ context.Context, _ function.DefinitionReque
 		Parameters: []function.Parameter{
 			function.StringParameter{
 				Name:        "input",
-				Description: `The OCI reference string to parse. This supports any valid OCI reference string, including those with a tag, digest, or both. For example: 'cgr.dev/my-project/my-image:latest' or 'cgr.dev/my-project/my-image@sha256:...'. Note that when tags are provided, they will be replaced in favor of the digest.`,
+				Description: "The OCI reference string to parse.",
 			},
 		},
 		Return: function.ObjectReturn{
