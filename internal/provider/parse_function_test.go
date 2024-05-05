@@ -7,12 +7,14 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
 	"github.com/hashicorp/terraform-plugin-testing/statecheck"
+	"github.com/hashicorp/terraform-plugin-testing/tfversion"
 )
 
 func TestParseFunction(t *testing.T) {
 	// A naked ref string errors due to missing digest
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		TerraformVersionChecks:   []tfversion.TerraformVersionCheck{tfversion.SkipBelow(tfversion.Version1_8_0)},
 		Steps: []resource.TestStep{{
 			Config:      `output "parsed" { value = provider::oci::parse("") }`,
 			ExpectError: regexp.MustCompile(""), // any error is ok
@@ -22,6 +24,7 @@ func TestParseFunction(t *testing.T) {
 	// A fully qualified tag ref string errors due to missing digest
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		TerraformVersionChecks:   []tfversion.TerraformVersionCheck{tfversion.SkipBelow(tfversion.Version1_8_0)},
 		Steps: []resource.TestStep{{
 			Config:      `output "parsed" { value = provider::oci::parse("cgr.dev/foo/sample:latest") }`,
 			ExpectError: regexp.MustCompile(""), // any error is ok
@@ -31,6 +34,7 @@ func TestParseFunction(t *testing.T) {
 	// A fully qualified ref
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		TerraformVersionChecks:   []tfversion.TerraformVersionCheck{tfversion.SkipBelow(tfversion.Version1_8_0)},
 		Steps: []resource.TestStep{{
 			Config: `output "parsed" { value = provider::oci::parse("cgr.dev/foo/sample@sha256:1234567890123456789012345678901234567890123456789012345678901234") }`,
 			ConfigStateChecks: []statecheck.StateCheck{
@@ -48,6 +52,7 @@ func TestParseFunction(t *testing.T) {
 	// A shorthand digest ref string has everything (including a pseudo tag)
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		TerraformVersionChecks:   []tfversion.TerraformVersionCheck{tfversion.SkipBelow(tfversion.Version1_8_0)},
 		Steps: []resource.TestStep{{
 			Config: `output "parsed" { value = provider::oci::parse("sample@sha256:1234567890123456789012345678901234567890123456789012345678901234") }`,
 			ConfigStateChecks: []statecheck.StateCheck{
@@ -65,7 +70,7 @@ func TestParseFunction(t *testing.T) {
 	// A shorthand tagged and digest ref string has everything (including a replaced pseudo tag)
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-
+		TerraformVersionChecks:   []tfversion.TerraformVersionCheck{tfversion.SkipBelow(tfversion.Version1_8_0)},
 		Steps: []resource.TestStep{{
 			Config: `output "parsed" { value = provider::oci::parse("sample:cursed@sha256:1234567890123456789012345678901234567890123456789012345678901234") }`,
 			ConfigStateChecks: []statecheck.StateCheck{
