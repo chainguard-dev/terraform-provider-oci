@@ -46,7 +46,7 @@ func (d *RefDataSource) Metadata(ctx context.Context, req datasource.MetadataReq
 func (d *RefDataSource) Schema(ctx context.Context, req datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "Image ref data source",
-
+		DeprecationMessage:  "This data source is deprecated and will be removed in a future release. Use the `get` function instead.",
 		Attributes: map[string]schema.Attribute{
 			"ref": schema.StringAttribute{
 				MarkdownDescription: "Image ref to lookup",
