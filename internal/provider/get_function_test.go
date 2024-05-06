@@ -64,20 +64,14 @@ func TestGetFunction(t *testing.T) {
 		Steps: []resource.TestStep{{
 			Config: fmt.Sprintf(`output "gotten" { value = provider::oci::get(%q) }`, ref),
 			ConfigStateChecks: []statecheck.StateCheck{
-				statecheck.ExpectKnownOutputValue("gotten", knownvalue.ObjectPartial(map[string]knownvalue.Check{
+				statecheck.ExpectKnownOutputValue("gotten", knownvalue.ObjectExact(map[string]knownvalue.Check{
 					"digest": knownvalue.StringExact(d.String()),
 					"tag":    knownvalue.StringExact("latest"),
-					"manifest": knownvalue.ObjectPartial(map[string]knownvalue.Check{
+					"manifest": knownvalue.ObjectExact(map[string]knownvalue.Check{
 						"schema_version": knownvalue.NumberExact(big.NewFloat(2)),
 						"media_type":     knownvalue.StringExact(string(ggcrtypes.OCIManifestSchema1)),
-						"config":         knownvalue.ObjectPartial(map[string]knownvalue.Check{
-							// TODO: These are not populated for some odd reason...
-							//"env": knownvalue.ListExact([]knownvalue.Check{knownvalue.StringExact("FOO=BAR")}),
-							//"user": knownvalue.StringExact("nobody"),
-							//"entrypoint": knownvalue.ListExact([]knownvalue.Check{knownvalue.StringExact("/bin/sh")}),
-							//"cmd":        knownvalue.ListExact([]knownvalue.Check{knownvalue.StringExact("-c"), knownvalue.StringExact("echo hello world")}),
-							//"working_dir": knownvalue.StringExact("/tmp"),
-							//"created_at":  knownvalue.StringExact(now.Format(time.RFC3339)),
+						"config": knownvalue.ObjectPartial(map[string]knownvalue.Check{
+							"digest": knownvalue.StringRegexp(digestRE),
 						}),
 						"layers": knownvalue.ListExact([]knownvalue.Check{
 							knownvalue.ObjectPartial(map[string]knownvalue.Check{"digest": knownvalue.StringRegexp(digestRE)}),
@@ -85,7 +79,18 @@ func TestGetFunction(t *testing.T) {
 							knownvalue.ObjectPartial(map[string]knownvalue.Check{"digest": knownvalue.StringRegexp(digestRE)}),
 						}),
 						"annotations": knownvalue.MapExact(map[string]knownvalue.Check{"foo": knownvalue.StringExact("bar")}),
+						"manifests":   knownvalue.Null(),
+						"subject":     knownvalue.Null(),
 					}),
+					"config": knownvalue.ObjectExact(map[string]knownvalue.Check{
+						"env":         knownvalue.ListExact([]knownvalue.Check{knownvalue.StringExact("FOO=BAR")}),
+						"user":        knownvalue.StringExact("nobody"),
+						"entrypoint":  knownvalue.ListExact([]knownvalue.Check{knownvalue.StringExact("/bin/sh")}),
+						"cmd":         knownvalue.ListExact([]knownvalue.Check{knownvalue.StringExact("-c"), knownvalue.StringExact("echo hello world")}),
+						"working_dir": knownvalue.StringExact("/tmp"),
+						"created_at":  knownvalue.StringExact(now.Format(time.RFC3339)),
+					}),
+					"images": knownvalue.Null(),
 				})),
 			},
 		}},
@@ -132,7 +137,7 @@ func TestGetFunction(t *testing.T) {
 		Steps: []resource.TestStep{{
 			Config: fmt.Sprintf(`output "gotten" { value = provider::oci::get(%q) }`, ref),
 			ConfigStateChecks: []statecheck.StateCheck{
-				statecheck.ExpectKnownOutputValue("gotten", knownvalue.ObjectPartial(map[string]knownvalue.Check{
+				statecheck.ExpectKnownOutputValue("gotten", knownvalue.ObjectExact(map[string]knownvalue.Check{
 					"digest": knownvalue.StringExact(d.String()),
 					"tag":    knownvalue.StringExact("index"),
 					"manifest": knownvalue.ObjectPartial(map[string]knownvalue.Check{
@@ -158,6 +163,7 @@ func TestGetFunction(t *testing.T) {
 						}),
 						"annotations": knownvalue.MapExact(map[string]knownvalue.Check{"foo": knownvalue.StringExact("bar")}),
 					}),
+					"config": knownvalue.Null(),
 					"images": knownvalue.MapExact(map[string]knownvalue.Check{
 						"linux/amd64":              knownvalue.ObjectPartial(map[string]knownvalue.Check{"digest": knownvalue.StringRegexp(digestRE)}),
 						"windows/arm64/v3:1-rc365": knownvalue.ObjectPartial(map[string]knownvalue.Check{"digest": knownvalue.StringRegexp(digestRE)}),
