@@ -58,6 +58,15 @@ func TestGetFunction(t *testing.T) {
 		t.Fatalf("failed to get image digest: %v", err)
 	}
 
+	isDescriptor := func(mt ggcrtypes.MediaType) knownvalue.Check {
+		return knownvalue.ObjectExact(map[string]knownvalue.Check{
+			"digest":     knownvalue.StringRegexp(digestRE),
+			"media_type": knownvalue.StringExact(string(mt)),
+			"size":       knownvalue.NotNull(),
+			"platform":   knownvalue.Null(),
+		})
+	}
+
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		TerraformVersionChecks:   []tfversion.TerraformVersionCheck{tfversion.SkipBelow(tfversion.Version1_8_0)},
@@ -70,13 +79,11 @@ func TestGetFunction(t *testing.T) {
 					"manifest": knownvalue.ObjectExact(map[string]knownvalue.Check{
 						"schema_version": knownvalue.NumberExact(big.NewFloat(2)),
 						"media_type":     knownvalue.StringExact(string(ggcrtypes.OCIManifestSchema1)),
-						"config": knownvalue.ObjectPartial(map[string]knownvalue.Check{
-							"digest": knownvalue.StringRegexp(digestRE),
-						}),
+						"config":         isDescriptor(ggcrtypes.DockerConfigJSON),
 						"layers": knownvalue.ListExact([]knownvalue.Check{
-							knownvalue.ObjectPartial(map[string]knownvalue.Check{"digest": knownvalue.StringRegexp(digestRE)}),
-							knownvalue.ObjectPartial(map[string]knownvalue.Check{"digest": knownvalue.StringRegexp(digestRE)}),
-							knownvalue.ObjectPartial(map[string]knownvalue.Check{"digest": knownvalue.StringRegexp(digestRE)}),
+							isDescriptor(ggcrtypes.DockerLayer),
+							isDescriptor(ggcrtypes.DockerLayer),
+							isDescriptor(ggcrtypes.DockerLayer),
 						}),
 						"annotations": knownvalue.MapExact(map[string]knownvalue.Check{"foo": knownvalue.StringExact("bar")}),
 						"manifests":   knownvalue.Null(),
@@ -140,33 +147,48 @@ func TestGetFunction(t *testing.T) {
 				statecheck.ExpectKnownOutputValue("gotten", knownvalue.ObjectExact(map[string]knownvalue.Check{
 					"digest": knownvalue.StringExact(d.String()),
 					"tag":    knownvalue.StringExact("index"),
-					"manifest": knownvalue.ObjectPartial(map[string]knownvalue.Check{
+					"manifest": knownvalue.ObjectExact(map[string]knownvalue.Check{
 						"schema_version": knownvalue.NumberExact(big.NewFloat(2)),
 						"media_type":     knownvalue.StringExact(string(ggcrtypes.OCIImageIndex)),
 						"manifests": knownvalue.ListExact([]knownvalue.Check{
-							knownvalue.ObjectPartial(map[string]knownvalue.Check{
+							knownvalue.ObjectExact(map[string]knownvalue.Check{
 								"digest": knownvalue.StringRegexp(digestRE),
-								"platform": knownvalue.ObjectPartial(map[string]knownvalue.Check{
+								"platform": knownvalue.ObjectExact(map[string]knownvalue.Check{
 									"os":           knownvalue.StringExact("linux"),
 									"architecture": knownvalue.StringExact("amd64"),
+									"variant":      knownvalue.StringExact(""),
+									"os_version":   knownvalue.StringExact(""),
 								}),
+								"media_type": knownvalue.StringExact(string(ggcrtypes.OCIManifestSchema1)),
+								"size":       knownvalue.NotNull(),
 							}),
-							knownvalue.ObjectPartial(map[string]knownvalue.Check{
+							knownvalue.ObjectExact(map[string]knownvalue.Check{
 								"digest": knownvalue.StringRegexp(digestRE),
-								"platform": knownvalue.ObjectPartial(map[string]knownvalue.Check{
+								"platform": knownvalue.ObjectExact(map[string]knownvalue.Check{
 									"os":           knownvalue.StringExact("windows"),
 									"architecture": knownvalue.StringExact("arm64"),
 									"variant":      knownvalue.StringExact("v3"),
 									"os_version":   knownvalue.StringExact("1-rc365"),
 								}),
+								"media_type": knownvalue.StringExact(string(ggcrtypes.OCIManifestSchema1)),
+								"size":       knownvalue.NotNull(),
 							}),
 						}),
 						"annotations": knownvalue.MapExact(map[string]knownvalue.Check{"foo": knownvalue.StringExact("bar")}),
+						"layers":      knownvalue.Null(),
+						"subject":     knownvalue.Null(),
+						"config":      knownvalue.Null(),
 					}),
 					"config": knownvalue.Null(),
 					"images": knownvalue.MapExact(map[string]knownvalue.Check{
-						"linux/amd64":              knownvalue.ObjectPartial(map[string]knownvalue.Check{"digest": knownvalue.StringRegexp(digestRE)}),
-						"windows/arm64/v3:1-rc365": knownvalue.ObjectPartial(map[string]knownvalue.Check{"digest": knownvalue.StringRegexp(digestRE)}),
+						"linux/amd64": knownvalue.ObjectExact(map[string]knownvalue.Check{
+							"digest":    knownvalue.StringRegexp(digestRE),
+							"image_ref": knownvalue.NotNull(),
+						}),
+						"windows/arm64/v3:1-rc365": knownvalue.ObjectExact(map[string]knownvalue.Check{
+							"digest":    knownvalue.StringRegexp(digestRE),
+							"image_ref": knownvalue.NotNull(),
+						}),
 					}),
 				})),
 			},
