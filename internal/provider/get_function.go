@@ -39,6 +39,7 @@ func (s *GetFunction) Definition(_ context.Context, _ function.DefinitionRequest
 		},
 		Return: function.ObjectReturn{
 			AttributeTypes: map[string]attr.Type{
+				"full_ref": basetypes.StringType{},
 				"digest":   basetypes.StringType{},
 				"tag":      basetypes.StringType{},
 				"manifest": basetypes.ObjectType{AttrTypes: manifestAttribute.AttributeTypes},
@@ -68,6 +69,7 @@ func (s *GetFunction) Run(ctx context.Context, req function.RunRequest, resp *fu
 	}
 
 	result := struct {
+		FullRef  string           `tfsdk:"full_ref"`
 		Digest   string           `tfsdk:"digest"`
 		Tag      string           `tfsdk:"tag"`
 		Manifest *Manifest        `tfsdk:"manifest"`
@@ -89,6 +91,7 @@ func (s *GetFunction) Run(ctx context.Context, req function.RunRequest, resp *fu
 	}
 
 	result.Digest = desc.Digest.String()
+	result.FullRef = ref.Context().Digest(desc.Digest.String()).String()
 
 	mf := &Manifest{}
 	if err := mf.FromDescriptor(desc); err != nil {

@@ -74,8 +74,9 @@ func TestGetFunction(t *testing.T) {
 			Config: fmt.Sprintf(`output "gotten" { value = provider::oci::get(%q) }`, ref),
 			ConfigStateChecks: []statecheck.StateCheck{
 				statecheck.ExpectKnownOutputValue("gotten", knownvalue.ObjectExact(map[string]knownvalue.Check{
-					"digest": knownvalue.StringExact(d.String()),
-					"tag":    knownvalue.StringExact("latest"),
+					"full_ref": knownvalue.StringExact(fmt.Sprintf("%s@%s", ref.Context().Name(), d.String())),
+					"digest":   knownvalue.StringExact(d.String()),
+					"tag":      knownvalue.StringExact("latest"),
 					"manifest": knownvalue.ObjectExact(map[string]knownvalue.Check{
 						"schema_version": knownvalue.NumberExact(big.NewFloat(2)),
 						"media_type":     knownvalue.StringExact(string(ggcrtypes.OCIManifestSchema1)),
@@ -145,8 +146,9 @@ func TestGetFunction(t *testing.T) {
 			Config: fmt.Sprintf(`output "gotten" { value = provider::oci::get(%q) }`, ref),
 			ConfigStateChecks: []statecheck.StateCheck{
 				statecheck.ExpectKnownOutputValue("gotten", knownvalue.ObjectExact(map[string]knownvalue.Check{
-					"digest": knownvalue.StringExact(d.String()),
-					"tag":    knownvalue.StringExact("index"),
+					"full_ref": knownvalue.StringExact(fmt.Sprintf("%s@%s", ref.Context().Name(), d.String())),
+					"digest":   knownvalue.StringExact(d.String()),
+					"tag":      knownvalue.StringExact("index"),
 					"manifest": knownvalue.ObjectExact(map[string]knownvalue.Check{
 						"schema_version": knownvalue.NumberExact(big.NewFloat(2)),
 						"media_type":     knownvalue.StringExact(string(ggcrtypes.OCIImageIndex)),
