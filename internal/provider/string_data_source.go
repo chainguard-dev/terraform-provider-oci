@@ -41,6 +41,7 @@ func (*StringDataSource) Metadata(ctx context.Context, req datasource.MetadataRe
 func (d *StringDataSource) Schema(ctx context.Context, req datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		MarkdownDescription: `Data source for parsing a pinned oci string into its constituent parts. A pinned oci reference is one that includes a digest, and is in the format: '${registry}/${repo}@${digest}'. For example: 'cgr.dev/my-project/my-image@sha256:...'.`,
+		DeprecationMessage:  "This data source is deprecated and will be removed in a future release. Use the `parse` function instead.",
 		Attributes: map[string]schema.Attribute{
 			"input": schema.StringAttribute{
 				MarkdownDescription: `The oci reference string to parse. This supports any valid oci reference string, including those with a tag, digest, or both. For example: 'cgr.dev/my-project/my-image:latest' or 'cgr.dev/my-project/my-image@sha256:...'. Note that when tags are provided, they will be replaced in favor of the digest.`,
@@ -85,6 +86,7 @@ func (d *StringDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 	ref, err := name.ParseReference(data.Input.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Invalid reference string", fmt.Sprintf("Unable to parse ref %s, got error: %v", data.Input.ValueString(), err))
+		return
 	}
 	data.Id = types.StringValue(ref.Name())
 

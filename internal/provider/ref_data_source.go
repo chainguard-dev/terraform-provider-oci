@@ -46,7 +46,7 @@ func (d *RefDataSource) Metadata(ctx context.Context, req datasource.MetadataReq
 func (d *RefDataSource) Schema(ctx context.Context, req datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "Image ref data source",
-
+		DeprecationMessage:  "This data source is deprecated and will be removed in a future release. Use the `get` function instead.",
 		Attributes: map[string]schema.Attribute{
 			"ref": schema.StringAttribute{
 				MarkdownDescription: "Image ref to lookup",
@@ -141,8 +141,8 @@ func (d *RefDataSource) Read(ctx context.Context, req datasource.ReadRequest, re
 				continue
 			}
 			data.Images[m.Platform.String()] = Image{
-				Digest:   types.StringValue(m.Digest.String()),
-				ImageRef: types.StringValue(ref.Context().Digest(m.Digest.String()).String()),
+				Digest:   m.Digest.String(),
+				ImageRef: ref.Context().Digest(m.Digest.String()).String(),
 			}
 		}
 	} else if desc.MediaType.IsImage() {

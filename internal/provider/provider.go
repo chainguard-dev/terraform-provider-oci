@@ -7,12 +7,13 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/google"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/function"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 )
 
-var _ provider.Provider = &OCIProvider{}
+var _ provider.ProviderWithFunctions = &OCIProvider{}
 
 // OCIProvider defines the provider implementation.
 type OCIProvider struct {
@@ -107,6 +108,13 @@ func (p *OCIProvider) DataSources(ctx context.Context) []func() datasource.DataS
 		NewStringDataSource,
 		NewStructureTestDataSource,
 		NewExecTestDataSource,
+	}
+}
+
+func (p *OCIProvider) Functions(ctx context.Context) []func() function.Function {
+	return []func() function.Function{
+		NewParseFunction,
+		NewGetFunction,
 	}
 }
 
