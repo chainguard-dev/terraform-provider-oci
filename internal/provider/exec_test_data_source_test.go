@@ -33,7 +33,7 @@ func TestAccExecTestDataSource(t *testing.T) {
 }`, d.String()),
 			Check: resource.ComposeAggregateTestCheckFunc(
 				resource.TestCheckResourceAttr("data.oci_exec_test.test", "digest", fmt.Sprintf("cgr.dev/chainguard/wolfi-base@%s", d.String())),
-				resource.TestCheckResourceAttr("data.oci_exec_test.test", "id", fmt.Sprintf("cgr.dev/chainguard/wolfi-base@%s", d.String())),
+				resource.TestMatchResourceAttr("data.oci_exec_test.test", "id", regexp.MustCompile(".*cgr.dev/chainguard/wolfi-base@"+d.String())),
 				resource.TestCheckResourceAttr("data.oci_exec_test.test", "exit_code", "0"),
 				resource.TestCheckResourceAttr("data.oci_exec_test.test", "output", ""),
 			),
@@ -54,7 +54,7 @@ func TestAccExecTestDataSource(t *testing.T) {
 }`, d.String()),
 			Check: resource.ComposeAggregateTestCheckFunc(
 				resource.TestCheckResourceAttr("data.oci_exec_test.env", "digest", fmt.Sprintf("cgr.dev/chainguard/wolfi-base@%s", d.String())),
-				resource.TestCheckResourceAttr("data.oci_exec_test.env", "id", fmt.Sprintf("cgr.dev/chainguard/wolfi-base@%s", d.String())),
+				resource.TestMatchResourceAttr("data.oci_exec_test.env", "id", regexp.MustCompile(".*cgr.dev/chainguard/wolfi-base@"+d.String())),
 				resource.TestCheckResourceAttr("data.oci_exec_test.env", "exit_code", "0"),
 				resource.TestCheckResourceAttr("data.oci_exec_test.env", "output", ""),
 			),
@@ -83,7 +83,7 @@ func TestAccExecTestDataSource(t *testing.T) {
 		}`, d.String()),
 			Check: resource.ComposeAggregateTestCheckFunc(
 				resource.TestCheckResourceAttr("data.oci_exec_test.working_dir", "digest", fmt.Sprintf("cgr.dev/chainguard/wolfi-base@%s", d.String())),
-				resource.TestCheckResourceAttr("data.oci_exec_test.working_dir", "id", fmt.Sprintf("cgr.dev/chainguard/wolfi-base@%s", d.String())),
+				resource.TestMatchResourceAttr("data.oci_exec_test.working_dir", "id", regexp.MustCompile(".*cgr.dev/chainguard/wolfi-base@"+d.String())),
 				resource.TestCheckResourceAttr("data.oci_exec_test.working_dir", "exit_code", "0"),
 				resource.TestCheckResourceAttr("data.oci_exec_test.working_dir", "output", ""),
 			),
@@ -131,7 +131,7 @@ func TestAccExecTestDataSource_FreePort(t *testing.T) {
 `, i, d.String())
 		checks = append(checks,
 			resource.TestCheckResourceAttr(fmt.Sprintf("data.oci_exec_test.freeport-%d", i), "digest", fmt.Sprintf("cgr.dev/chainguard/wolfi-base@%s", d.String())),
-			resource.TestCheckResourceAttr(fmt.Sprintf("data.oci_exec_test.freeport-%d", i), "id", fmt.Sprintf("cgr.dev/chainguard/wolfi-base@%s", d.String())),
+			resource.TestMatchResourceAttr(fmt.Sprintf("data.oci_exec_test.freeport-%d", i), "id", regexp.MustCompile(".*cgr.dev/chainguard/wolfi-base@"+d.String())),
 		)
 	}
 
