@@ -2,6 +2,8 @@ package provider
 
 import (
 	"context"
+	"crypto/md5"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net"
@@ -185,13 +187,25 @@ func (d *ExecTestDataSource) Read(ctx context.Context, req datasource.ReadReques
 	}
 
 	cmd := exec.CommandContext(ctx, "sh", "-c", data.Script.ValueString())
+	go func() {
+		select {
+		case <-ctx.Done():
+			if err := cmd.Process.Kill(); err != nil {
+				tflog.Error(ctx, "failed to kill process", map[string]interface{}{"error": err})
+			}
+		case <-time.After(time.Duration(timeout) * time.Second):
+			if err := cmd.Process.Kill(); err != nil {
+				tflog.Error(ctx, "failed to kill process", map[string]interface{}{"error": err})
+			}
+		}
+	}()
 	cmd.Env = env
 	cmd.Dir = data.WorkingDir.ValueString()
 	fullout, err := cmd.CombinedOutput()
 	data.Output = types.StringValue("") // always empty.
 
 	data.TestedRef = data.Digest
-	data.Id = data.Digest
+	data.Id = types.StringValue(md5str(data.Script.ValueString()) + data.Digest.ValueString())
 	data.ExitCode = types.Int64Value(int64(cmd.ProcessState.ExitCode()))
 
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
@@ -208,6 +222,12 @@ func (d *ExecTestDataSource) Read(ctx context.Context, req datasource.ReadReques
 
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+}
+
+func md5str(s string) string {
+	h := md5.New()
+	h.Write([]byte(s))
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 type positiveIntValidator struct{}
