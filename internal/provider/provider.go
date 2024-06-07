@@ -104,8 +104,6 @@ func (p *OCIProvider) Resources(ctx context.Context) []func() resource.Resource 
 
 func (p *OCIProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
-		NewRefDataSource,
-		NewStringDataSource,
 		NewStructureTestDataSource,
 		NewExecTestDataSource,
 	}
