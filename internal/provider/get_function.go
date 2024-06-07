@@ -9,6 +9,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/function"
+	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 )
 
@@ -138,4 +139,64 @@ func (s *GetFunction) Run(ctx context.Context, req function.RunRequest, resp *fu
 	}
 
 	resp.Error = function.ConcatFuncErrors(resp.Error, resp.Result.Set(ctx, &result))
+}
+
+var imageType = basetypes.ObjectType{
+	AttrTypes: map[string]attr.Type{
+		"digest":    basetypes.StringType{},
+		"image_ref": basetypes.StringType{},
+	},
+}
+
+var manifestAttribute = schema.ObjectAttribute{
+	MarkdownDescription: "Manifest of the image or index.",
+	AttributeTypes: map[string]attr.Type{
+		"schema_version": basetypes.NumberType{},
+		"media_type":     basetypes.StringType{},
+		"config":         descriptorType,
+		"layers": basetypes.ListType{
+			ElemType: descriptorType,
+		},
+		"annotations": basetypes.MapType{
+			ElemType: basetypes.StringType{},
+		},
+		"manifests": basetypes.ListType{
+			ElemType: descriptorType,
+		},
+		"subject": descriptorType,
+	},
+}
+
+var descriptorType = basetypes.ObjectType{
+	AttrTypes: map[string]attr.Type{
+		"media_type": basetypes.StringType{},
+		"size":       basetypes.NumberType{},
+		"digest":     basetypes.StringType{},
+		"platform": basetypes.ObjectType{
+			AttrTypes: map[string]attr.Type{
+				"architecture": basetypes.StringType{},
+				"os":           basetypes.StringType{},
+				"variant":      basetypes.StringType{},
+				"os_version":   basetypes.StringType{},
+			},
+		},
+	},
+}
+
+var configAttribute = schema.ObjectAttribute{
+	MarkdownDescription: "Config of an image.",
+	AttributeTypes: map[string]attr.Type{
+		"env": basetypes.ListType{
+			ElemType: basetypes.StringType{},
+		},
+		"user":        basetypes.StringType{},
+		"working_dir": basetypes.StringType{},
+		"entrypoint": basetypes.ListType{
+			ElemType: basetypes.StringType{},
+		},
+		"cmd": basetypes.ListType{
+			ElemType: basetypes.StringType{},
+		},
+		"created_at": basetypes.StringType{},
+	},
 }

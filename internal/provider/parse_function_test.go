@@ -10,6 +10,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/tfversion"
 )
 
+var digestRE = regexp.MustCompile("^sha256:[0-9a-f]{64}$")
+
 func TestParseFunction(t *testing.T) {
 	// A naked ref string errors due to missing digest
 	resource.Test(t, resource.TestCase{
