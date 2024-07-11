@@ -42,6 +42,7 @@ func (s *ParseFunction) Definition(_ context.Context, _ function.DefinitionReque
 				"registry_repo": basetypes.StringType{},
 				"digest":        basetypes.StringType{},
 				"pseudo_tag":    basetypes.StringType{},
+				"ref":           basetypes.StringType{},
 			},
 		},
 	}
@@ -76,12 +77,14 @@ func (s *ParseFunction) Run(ctx context.Context, req function.RunRequest, resp *
 		RegistryRepo string `tfsdk:"registry_repo"`
 		Digest       string `tfsdk:"digest"`
 		PseudoTag    string `tfsdk:"pseudo_tag"`
+		Ref          string `tfsdk:"ref"`
 	}{
 		Registry:     ref.Context().RegistryStr(),
 		Repo:         ref.Context().RepositoryStr(),
 		RegistryRepo: ref.Context().RegistryStr() + "/" + ref.Context().RepositoryStr(),
 		Digest:       ref.Identifier(),
 		PseudoTag:    fmt.Sprintf("unused@%s", ref.Identifier()),
+		Ref:          ref.String(),
 	}
 
 	resp.Error = function.ConcatFuncErrors(resp.Error, resp.Result.Set(ctx, &result))
