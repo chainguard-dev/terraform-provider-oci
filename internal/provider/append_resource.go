@@ -25,8 +25,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
-var _ resource.Resource = &AppendResource{}
-var _ resource.ResourceWithImportState = &AppendResource{}
+var (
+	_ resource.Resource                = &AppendResource{}
+	_ resource.ResourceWithImportState = &AppendResource{}
+)
 
 func NewAppendResource() resource.Resource {
 	return &AppendResource{}
@@ -198,7 +200,10 @@ func (r *AppendResource) doAppend(ctx context.Context, data *AppendResourceModel
 	if err != nil {
 		return nil, []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to parse base image", fmt.Sprintf("Unable to parse base image %q, got error: %s", data.BaseImage.ValueString(), err))}
 	}
-	img, err := remote.Image(baseref, r.popts.withContext(ctx)...)
+
+	ropts := r.popts.withContext(ctx)
+
+	desc, err := remote.Get(baseref, ropts...)
 	if err != nil {
 		return nil, []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to fetch base image", fmt.Sprintf("Unable to fetch base image %q, got error: %s", data.BaseImage.ValueString(), err))}
 	}
@@ -248,19 +253,64 @@ func (r *AppendResource) doAppend(ctx context.Context, data *AppendResourceModel
 		})
 	}
 
-	img, err = mutate.Append(img, adds...)
-	if err != nil {
-		return nil, []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to append layers", fmt.Sprintf("Unable to append layers, got error: %s", err))}
-	}
+	var d name.Digest
 
-	dig, err := img.Digest()
-	if err != nil {
-		return nil, []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to get image digest", fmt.Sprintf("Unable to get image digest, got error: %s", err))}
-	}
+	if desc.MediaType.IsIndex() {
+		baseidx, err := desc.ImageIndex()
+		if err != nil {
+			return nil, []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to read image index", fmt.Sprintf("Unable to read image index for ref %q, got error: %s", data.BaseImage.ValueString(), err))}
+		}
 
-	d := baseref.Context().Digest(dig.String())
-	if err := remote.Write(d, img, r.popts.withContext(ctx)...); err != nil {
-		return nil, []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to push image", fmt.Sprintf("Unable to push image, got error: %s", err))}
+		baseimf, err := baseidx.IndexManifest()
+		if err != nil {
+			return nil, []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to read image index manifest", fmt.Sprintf("Unable to read image index manifest for ref %q, got error: %s", data.BaseImage.ValueString(), err))}
+		}
+
+		// get the image for each platform
+		for _, p := range baseimf.Manifests {
+			baseimg, err := baseidx.Image(p.Digest)
+			if err != nil {
+				return nil, []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to load image", fmt.Sprintf("Unable to load image for ref %q, got error: %s", data.BaseImage.ValueString(), err))}
+			}
+
+			img, err := mutate.Append(baseimg, adds...)
+			if err != nil {
+				return nil, []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to append layers", fmt.Sprintf("Unable to append layers, got error: %s", err))}
+			}
+
+			baseidx = mutate.AppendManifests(baseidx, mutate.IndexAddendum{Add: img, Descriptor: p})
+
+			dig, err := baseidx.Digest()
+			if err != nil {
+				return nil, []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to get image digest", fmt.Sprintf("Unable to get image digest, got error: %s", err))}
+			}
+
+			d = baseref.Context().Digest(dig.String())
+			if err := remote.WriteIndex(d, baseidx, r.popts.withContext(ctx)...); err != nil {
+				return nil, []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to push image", fmt.Sprintf("Unable to push image, got error: %s", err))}
+			}
+		}
+
+	} else if desc.MediaType.IsImage() {
+		baseimg, err := remote.Image(baseref, ropts...)
+		if err != nil {
+			return nil, []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to fetch base image", fmt.Sprintf("Unable to fetch base image %q, got error: %s", data.BaseImage.ValueString(), err))}
+		}
+
+		img, err := mutate.Append(baseimg, adds...)
+		if err != nil {
+			return nil, []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to append layers", fmt.Sprintf("Unable to append layers, got error: %s", err))}
+		}
+
+		dig, err := img.Digest()
+		if err != nil {
+			return nil, []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to get image digest", fmt.Sprintf("Unable to get image digest, got error: %s", err))}
+		}
+
+		d = baseref.Context().Digest(dig.String())
+		if err := remote.Write(d, img, r.popts.withContext(ctx)...); err != nil {
+			return nil, []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to push image", fmt.Sprintf("Unable to push image, got error: %s", err))}
+		}
 	}
 
 	// Write logs using the tflog package
