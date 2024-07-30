@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/empty"
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
@@ -266,9 +267,11 @@ func (r *AppendResource) doAppend(ctx context.Context, data *AppendResourceModel
 			return nil, []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to read image index manifest", fmt.Sprintf("Unable to read image index manifest for ref %q, got error: %s", data.BaseImage.ValueString(), err))}
 		}
 
-		// get the image for each platform
-		for _, p := range baseimf.Manifests {
-			baseimg, err := baseidx.Image(p.Digest)
+		var idx v1.ImageIndex = empty.Index
+
+		// append to each manifest in the index
+		for _, manifest := range baseimf.Manifests {
+			baseimg, err := baseidx.Image(manifest.Digest)
 			if err != nil {
 				return nil, []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to load image", fmt.Sprintf("Unable to load image for ref %q, got error: %s", data.BaseImage.ValueString(), err))}
 			}
@@ -278,17 +281,36 @@ func (r *AppendResource) doAppend(ctx context.Context, data *AppendResourceModel
 				return nil, []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to append layers", fmt.Sprintf("Unable to append layers, got error: %s", err))}
 			}
 
-			baseidx = mutate.AppendManifests(baseidx, mutate.IndexAddendum{Add: img, Descriptor: p})
-
-			dig, err := baseidx.Digest()
+			imgdig, err := img.Digest()
 			if err != nil {
 				return nil, []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to get image digest", fmt.Sprintf("Unable to get image digest, got error: %s", err))}
 			}
 
-			d = baseref.Context().Digest(dig.String())
-			if err := remote.WriteIndex(d, baseidx, r.popts.withContext(ctx)...); err != nil {
+			if err := remote.Write(baseref.Context().Digest(imgdig.String()), img, ropts...); err != nil {
 				return nil, []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to push image", fmt.Sprintf("Unable to push image, got error: %s", err))}
 			}
+
+			// Update the index with the new image
+			idx = mutate.AppendManifests(idx, mutate.IndexAddendum{
+				Add: img,
+				Descriptor: v1.Descriptor{
+					MediaType:    manifest.MediaType,
+					URLs:         manifest.URLs,
+					Annotations:  manifest.Annotations,
+					Platform:     manifest.Platform,
+					ArtifactType: manifest.ArtifactType,
+				},
+			})
+		}
+
+		dig, err := idx.Digest()
+		if err != nil {
+			return nil, []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to get index digest", fmt.Sprintf("Unable to get index digest, got error: %s", err))}
+		}
+
+		d = baseref.Context().Digest(dig.String())
+		if err := remote.WriteIndex(d, idx, ropts...); err != nil {
+			return nil, []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to push index", fmt.Sprintf("Unable to push index, got error: %s", err))}
 		}
 
 	} else if desc.MediaType.IsImage() {
