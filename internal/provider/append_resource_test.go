@@ -8,6 +8,9 @@ import (
 	ocitesting "github.com/chainguard-dev/terraform-provider-oci/testing"
 	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/google/go-containerregistry/pkg/name"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/empty"
+	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/google/go-containerregistry/pkg/v1/random"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/validate"
@@ -132,6 +135,56 @@ func TestAccAppendResource(t *testing.T) {
 						if err := validate.Index(idx); err != nil {
 							return fmt.Errorf("failed to validate image: %v", err)
 						}
+						return nil
+					}),
+				),
+			},
+		},
+	})
+
+	ref4 := repo.Tag("4")
+	var idx2 v1.ImageIndex = empty.Index
+
+	idx2 = mutate.AppendManifests(idx2, mutate.IndexAddendum{Add: img1})
+	idx2 = mutate.AppendManifests(idx2, mutate.IndexAddendum{Add: img1})
+
+	if err := remote.WriteIndex(ref4, idx2); err != nil {
+		t.Fatalf("failed to write index: %v", err)
+	}
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			// Create and Read testing
+			{
+				Config: fmt.Sprintf(`
+resource "oci_append" "test" {
+  base_image = %q
+  layers = [{
+    files = {
+      "/usr/local/test.txt" = { contents = "hello world" }
+    }
+  }]
+}
+          `, ref4),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("oci_append.test", "base_image", ref4.String()),
+					resource.TestMatchResourceAttr("oci_append.test", "id", regexp.MustCompile(`/test@sha256:[0-9a-f]{64}$`)),
+					resource.TestCheckFunc(func(s *terraform.State) error {
+						rs := s.RootModule().Resources["oci_append.test"]
+						ref, err := name.ParseReference(rs.Primary.Attributes["image_ref"])
+						if err != nil {
+							return fmt.Errorf("failed to parse reference: %v", err)
+						}
+						idx, err := remote.Index(ref)
+						if err != nil {
+							return fmt.Errorf("failed to pull index: %v", err)
+						}
+						if err := validate.Index(idx); err != nil {
+							return fmt.Errorf("failed to validate index: %v", err)
+						}
+
 						return nil
 					}),
 				),
