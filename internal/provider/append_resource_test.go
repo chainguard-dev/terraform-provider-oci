@@ -1,7 +1,11 @@
 package provider
 
 import (
+	"archive/tar"
 	"fmt"
+	"io"
+	"os"
+	"path/filepath"
 	"regexp"
 	"testing"
 
@@ -44,6 +48,15 @@ func TestAccAppendResource(t *testing.T) {
 		t.Fatalf("failed to write image: %v", err)
 	}
 
+	tf := filepath.Join(t.TempDir(), "test_path.txt")
+	if err := os.WriteFile(tf, []byte("hello world"), 0644); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+
+	if err := os.Chmod(tf, 0755); err != nil {
+		t.Fatalf("failed to chmod file: %v", err)
+	}
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -55,9 +68,10 @@ func TestAccAppendResource(t *testing.T) {
 				  layers = [{
 					files = {
 					  "/usr/local/test.txt" = { contents = "hello world" }
+            "/usr/local/test_path.txt" = { path = "%s" }
 					}
 				  }]
-				}`, ref1),
+				}`, ref1, tf),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("oci_append.test", "base_image", ref1.String()),
 					resource.TestMatchResourceAttr("oci_append.test", "image_ref", regexp.MustCompile(`/test@sha256:[0-9a-f]{64}$`)),
@@ -71,6 +85,134 @@ func TestAccAppendResource(t *testing.T) {
 						if err := validate.Image(img); err != nil {
 							return fmt.Errorf("failed to validate image: %v", err)
 						}
+						// test that the contents match what we expect
+						ls, err := img.Layers()
+						if err != nil {
+							return fmt.Errorf("failed to get layers: %v", err)
+						}
+						if len(ls) != 2 {
+							return fmt.Errorf("expected 2 layer, got %d", len(ls))
+						}
+
+						flrc, err := ls[1].Uncompressed()
+						if err != nil {
+							return fmt.Errorf("failed to get layer contents: %v", err)
+						}
+						defer flrc.Close()
+
+						// the layer should be a tar file with two files
+						tw := tar.NewReader(flrc)
+
+						hdr, err := tw.Next()
+						if err != nil {
+							return fmt.Errorf("failed to read next header: %v", err)
+						}
+						if hdr.Size != int64(len("hello world")) {
+							return fmt.Errorf("expected file size %d, got %d", len("hello world"), hdr.Size)
+						}
+
+						hdr, err = tw.Next()
+						if err != nil {
+							return fmt.Errorf("failed to read next header: %v", err)
+						}
+						if hdr.Size != int64(len("hello world")) {
+							return fmt.Errorf("expected file size %d, got %d", len("hello world"), hdr.Size)
+						}
+
+						return nil
+					}),
+				),
+			},
+			// Update and Read testing
+			{
+				Config: fmt.Sprintf(`resource "oci_append" "test" {
+					base_image = %q
+					layers = [{
+					  files = {
+						"/usr/local/test.txt" = { contents = "hello world" }
+						"/usr/bin/test.sh"    = { contents = "echo hello world" }
+					  }
+					}]
+				  }`, ref2),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("oci_append.test", "base_image", ref2.String()),
+					resource.TestMatchResourceAttr("oci_append.test", "id", regexp.MustCompile(`/test@sha256:[0-9a-f]{64}$`)),
+				),
+			},
+			// Delete testing automatically occurs in TestCase
+		},
+	})
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			// Create and Read testing
+			{
+				Config: fmt.Sprintf(`resource "oci_append" "test" {
+				  base_image = %q
+				  layers = [{
+					files = {
+            "/usr/local/test.txt" = { path = "%s" }
+					}
+				  }]
+				}`, ref1, tf),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("oci_append.test", "base_image", ref1.String()),
+					resource.TestMatchResourceAttr("oci_append.test", "image_ref", regexp.MustCompile(`/test@sha256:[0-9a-f]{64}$`)),
+					resource.TestMatchResourceAttr("oci_append.test", "id", regexp.MustCompile(`/test@sha256:[0-9a-f]{64}$`)),
+					resource.TestCheckFunc(func(s *terraform.State) error {
+						rs := s.RootModule().Resources["oci_append.test"]
+						img, err := crane.Pull(rs.Primary.Attributes["image_ref"])
+						if err != nil {
+							return fmt.Errorf("failed to pull image: %v", err)
+						}
+						if err := validate.Image(img); err != nil {
+							return fmt.Errorf("failed to validate image: %v", err)
+						}
+						// test that the contents match what we expect
+						ls, err := img.Layers()
+						if err != nil {
+							return fmt.Errorf("failed to get layers: %v", err)
+						}
+						if len(ls) != 2 {
+							return fmt.Errorf("expected 2 layer, got %d", len(ls))
+						}
+
+						flrc, err := ls[1].Uncompressed()
+						if err != nil {
+							return fmt.Errorf("failed to get layer contents: %v", err)
+						}
+						defer flrc.Close()
+
+						// the layer should be a tar file with one file
+						tr := tar.NewReader(flrc)
+
+						hdr, err := tr.Next()
+						if err != nil {
+							return fmt.Errorf("failed to read next header: %v", err)
+						}
+						if hdr.Name != "/usr/local/test.txt" {
+							return fmt.Errorf("expected file usr/local/test.txt, got %s", hdr.Name)
+						}
+						if hdr.Size != int64(len("hello world")) {
+							return fmt.Errorf("expected file size %d, got %d", len("hello world"), hdr.Size)
+						}
+						// ensure the mode is preserved
+						if hdr.Mode != 0755 {
+							return fmt.Errorf("expected mode %d, got %d", 0755, hdr.Mode)
+						}
+
+						// check the actual file contents are what we expect
+						content := make([]byte, hdr.Size)
+						if _, err := io.ReadFull(tr, content); err != nil {
+							return fmt.Errorf("failed to read file contents: %v", err)
+						}
+
+						if string(content) != "hello world" {
+							return fmt.Errorf("expected file contents %q, got %q", "hello world", string(content))
+						}
+
 						return nil
 					}),
 				),
@@ -135,6 +277,57 @@ func TestAccAppendResource(t *testing.T) {
 						if err := validate.Index(idx); err != nil {
 							return fmt.Errorf("failed to validate image: %v", err)
 						}
+
+						iidx, err := idx.IndexManifest()
+						if err != nil {
+							return fmt.Errorf("failed to get image index: %v", err)
+						}
+
+						for _, m := range iidx.Manifests {
+							img, err := idx.Image(m.Digest)
+							if err != nil {
+								return fmt.Errorf("failed to get image: %v", err)
+							}
+
+							ls, err := img.Layers()
+							if err != nil {
+								return fmt.Errorf("failed to get layers: %v", err)
+							}
+							if len(ls) != 2 {
+								return fmt.Errorf("expected 2 layer, got %d", len(ls))
+							}
+
+							flrc, err := ls[1].Uncompressed()
+							if err != nil {
+								return fmt.Errorf("failed to get layer contents: %v", err)
+							}
+							defer flrc.Close()
+
+							// the layer should be a tar file with one file
+							tr := tar.NewReader(flrc)
+
+							hdr, err := tr.Next()
+							if err != nil {
+								return fmt.Errorf("failed to read next header: %v", err)
+							}
+							if hdr.Name != "/usr/local/test.txt" {
+								return fmt.Errorf("expected file usr/local/test.txt, got %s", hdr.Name)
+							}
+							if hdr.Size != int64(len("hello world")) {
+								return fmt.Errorf("expected file size %d, got %d", len("hello world"), hdr.Size)
+							}
+
+							// check the actual file contents are what we expect
+							content := make([]byte, hdr.Size)
+							if _, err := io.ReadFull(tr, content); err != nil {
+								return fmt.Errorf("failed to read file contents: %v", err)
+							}
+
+							if string(content) != "hello world" {
+								return fmt.Errorf("expected file contents %q, got %q", "hello world", string(content))
+							}
+						}
+
 						return nil
 					}),
 				),

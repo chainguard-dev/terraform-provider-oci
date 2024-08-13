@@ -6,6 +6,9 @@ import (
 	"compress/gzip"
 	"context"
 	"fmt"
+	"io"
+	"os"
+	"strings"
 
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
@@ -77,14 +80,16 @@ func (r *AppendResource) Schema(ctx context.Context, req resource.SchemaRequest,
 					Attributes: map[string]schema.Attribute{
 						"files": schema.MapNestedAttribute{
 							MarkdownDescription: "Files to add to the layer.",
-							Optional:            false,
 							Required:            true,
 							NestedObject: schema.NestedAttributeObject{
 								Attributes: map[string]schema.Attribute{
 									"contents": schema.StringAttribute{
 										MarkdownDescription: "Content of the file.",
-										Optional:            false,
-										Required:            true,
+										Optional:            true,
+									},
+									"path": schema.StringAttribute{
+										MarkdownDescription: "Path to a file.",
+										Optional:            true,
 									},
 									// TODO: Add support for file mode.
 									// TODO: Add support for symlinks.
@@ -212,6 +217,7 @@ func (r *AppendResource) doAppend(ctx context.Context, data *AppendResourceModel
 	var ls []struct {
 		Files map[string]struct {
 			Contents types.String `tfsdk:"contents"`
+			Path     types.String `tfsdk:"path"`
 		} `tfsdk:"files"`
 	}
 	if diag := data.Layers.ElementsAs(ctx, &ls, false); diag.HasError() {
@@ -224,14 +230,58 @@ func (r *AppendResource) doAppend(ctx context.Context, data *AppendResourceModel
 		zw := gzip.NewWriter(&b)
 		tw := tar.NewWriter(zw)
 		for name, f := range l.Files {
-			if err := tw.WriteHeader(&tar.Header{
-				Name: name,
-				Size: int64(len(f.Contents.ValueString())),
-				Mode: 0644,
-			}); err != nil {
-				return nil, []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to write tar header", fmt.Sprintf("Unable to write tar header for %q, got error: %s", name, err))}
+			var (
+				size   int64
+				mode   int64
+				datarc io.ReadCloser
+			)
+
+			write := func(rc io.ReadCloser) error {
+				defer rc.Close()
+				if err := tw.WriteHeader(&tar.Header{
+					Name: name,
+					Size: size,
+					Mode: mode,
+				}); err != nil {
+					return fmt.Errorf("unable to write tar header: %w", err)
+				}
+
+				if _, err := io.CopyN(tw, rc, size); err != nil {
+					return fmt.Errorf("unable to write tar contents: %w", err)
+				}
+				return nil
 			}
-			if _, err := tw.Write([]byte(f.Contents.ValueString())); err != nil {
+
+			if f.Contents.ValueString() != "" {
+				size = int64(len(f.Contents.ValueString()))
+				mode = 0644
+				datarc = io.NopCloser(strings.NewReader(f.Contents.ValueString()))
+
+			} else if f.Path.ValueString() != "" {
+				fi, err := os.Stat(f.Path.ValueString())
+				if err != nil {
+					return nil, []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to stat file", fmt.Sprintf("Unable to stat file %q, got error: %s", f.Path.ValueString(), err))}
+				}
+
+				// skip any directories or symlinks
+				if fi.IsDir() || fi.Mode()&os.ModeSymlink != 0 {
+					continue
+				}
+
+				size = fi.Size()
+				mode = int64(fi.Mode())
+
+				fr, err := os.Open(f.Path.ValueString())
+				if err != nil {
+					return nil, []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to open file", fmt.Sprintf("Unable to open file %q, got error: %s", f.Path.ValueString(), err))}
+				}
+				datarc = fr
+
+			} else {
+				return nil, []diag.Diagnostic{diag.NewErrorDiagnostic("No file contents or path specified", fmt.Sprintf("No file contents or path specified for %q", name))}
+			}
+
+			if err := write(datarc); err != nil {
 				return nil, []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to write tar contents", fmt.Sprintf("Unable to write tar contents for %q, got error: %s", name, err))}
 			}
 		}

@@ -44,6 +44,7 @@ Required:
 <a id="nestedatt--layers--files"></a>
 ### Nested Schema for `layers.files`
 
-Required:
+Optional:
 
 - `contents` (String) Content of the file.
+- `path` (String) Path to a file.
