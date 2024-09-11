@@ -292,7 +292,9 @@ func (r *AppendResource) doAppend(ctx context.Context, data *AppendResourceModel
 			return nil, []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to close gzip writer", fmt.Sprintf("Unable to close gzip writer, got error: %s", err))}
 		}
 
-		l, err := tarball.LayerFromReader(&b)
+		l, err := tarball.LayerFromOpener(func() (io.ReadCloser, error) {
+			return io.NopCloser(bytes.NewBuffer(b.Bytes())), nil
+		})
 		if err != nil {
 			return nil, []diag.Diagnostic{diag.NewErrorDiagnostic("Unable to create layer", fmt.Sprintf("Unable to create layer, got error: %s", err))}
 		}
