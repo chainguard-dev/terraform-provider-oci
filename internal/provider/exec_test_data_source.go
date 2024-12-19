@@ -187,20 +187,9 @@ func (d *ExecTestDataSource) Read(ctx context.Context, req datasource.ReadReques
 	}
 
 	cmd := exec.CommandContext(ctx, "sh", "-c", data.Script.ValueString())
-	go func() {
-		select {
-		case <-ctx.Done():
-			if err := cmd.Process.Kill(); err != nil {
-				tflog.Error(ctx, "failed to kill process", map[string]interface{}{"error": err})
-			}
-		case <-time.After(time.Duration(timeout) * time.Second):
-			if err := cmd.Process.Kill(); err != nil {
-				tflog.Error(ctx, "failed to kill process", map[string]interface{}{"error": err})
-			}
-		}
-	}()
 	cmd.Env = env
 	cmd.Dir = data.WorkingDir.ValueString()
+
 	fullout, err := cmd.CombinedOutput()
 	data.Output = types.StringValue("") // always empty.
 
