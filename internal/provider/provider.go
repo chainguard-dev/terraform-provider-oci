@@ -23,16 +23,19 @@ type OCIProvider struct {
 	version string
 
 	defaultExecTimeoutSeconds int64
+	skipExecTests             bool
 }
 
 // OCIProviderModel describes the provider data model.
 type OCIProviderModel struct {
 	DefaultExecTimeoutSeconds *int64 `tfsdk:"default_exec_timeout_seconds"`
+	SkipExecTests             *bool  `tfsdk:"skip_exec_tests"`
 }
 
 type ProviderOpts struct {
 	ropts                     []remote.Option
 	defaultExecTimeoutSeconds int64
+	skipExecTests             bool
 }
 
 func (p *ProviderOpts) withContext(ctx context.Context) []remote.Option {
@@ -49,6 +52,10 @@ func (p *OCIProvider) Schema(ctx context.Context, req provider.SchemaRequest, re
 		Attributes: map[string]schema.Attribute{
 			"default_exec_timeout_seconds": schema.Int64Attribute{
 				MarkdownDescription: "Default timeout for exec tests",
+				Optional:            true,
+			},
+			"skip_exec_tests": schema.BoolAttribute{
+				MarkdownDescription: "If true, skip oci_exec_test tests",
 				Optional:            true,
 			},
 		},
@@ -89,6 +96,8 @@ func (p *OCIProvider) Configure(ctx context.Context, req provider.ConfigureReque
 	} else if data.DefaultExecTimeoutSeconds != nil {
 		opts.defaultExecTimeoutSeconds = *data.DefaultExecTimeoutSeconds
 	}
+
+	opts.skipExecTests = p.skipExecTests || (data.SkipExecTests != nil && *data.SkipExecTests)
 
 	resp.DataSourceData = opts
 	resp.ResourceData = opts

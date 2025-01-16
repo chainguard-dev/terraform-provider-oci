@@ -105,7 +105,6 @@ func TestAccExecTestDataSource(t *testing.T) {
 			ExpectError: regexp.MustCompile(`Test for ref\ncgr.dev/chainguard/wolfi-base@sha256:[0-9a-f]{64}\ntimed out after 1 seconds`),
 		}},
 	})
-
 }
 
 func TestAccExecTestDataSource_FreePort(t *testing.T) {
@@ -141,6 +140,31 @@ func TestAccExecTestDataSource_FreePort(t *testing.T) {
 		Steps: []resource.TestStep{{
 			Config: cfg,
 			Check:  resource.ComposeAggregateTestCheckFunc(checks...),
+		}},
+	})
+}
+
+func TestAccExecTestDataSource_SkipExecTests(t *testing.T) {
+	img, err := remote.Image(name.MustParseReference("cgr.dev/chainguard/wolfi-base:latest"))
+	if err != nil {
+		t.Fatalf("failed to fetch image: %v", err)
+	}
+	d, err := img.Digest()
+	if err != nil {
+		t.Fatalf("failed to get image digest: %v", err)
+	}
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: map[string]func() (tfprotov6.ProviderServer, error){
+			"oci": providerserver.NewProtocol6WithError(&OCIProvider{
+				skipExecTests: true,
+			}),
+		}, Steps: []resource.TestStep{{
+			Config: fmt.Sprintf(`data "oci_exec_test" "skipped" {
+  digest = "cgr.dev/chainguard/wolfi-base@%s"
+  script = "exit 1"
+}`, d.String()),
 		}},
 	})
 }
