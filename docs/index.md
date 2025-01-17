@@ -24,3 +24,4 @@ provider "oci" {
 ### Optional
 
 - `default_exec_timeout_seconds` (Number) Default timeout for exec tests
+- `skip_exec_tests` (Boolean) If true, skip oci_exec_test tests

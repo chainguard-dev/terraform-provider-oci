@@ -138,6 +138,11 @@ func (d *ExecTestDataSource) Read(ctx context.Context, req datasource.ReadReques
 		return
 	}
 
+	if d.popts.skipExecTests {
+		resp.Diagnostics.AddWarning("Skipping exec tests", "Skipping exec tests as per provider configuration")
+		return
+	}
+
 	ref, err := name.NewDigest(data.Digest.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Invalid ref", fmt.Sprintf("Unable to parse ref %s, got error: %s", data.Digest.ValueString(), err))
