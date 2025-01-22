@@ -167,4 +167,18 @@ func TestAccExecTestDataSource_SkipExecTests(t *testing.T) {
 }`, d.String()),
 		}},
 	})
+
+	t.Setenv("OCI_SKIP_EXEC_TESTS", "true")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: map[string]func() (tfprotov6.ProviderServer, error){
+			"oci": providerserver.NewProtocol6WithError(&OCIProvider{skipExecTests: false}),
+		}, Steps: []resource.TestStep{{
+			Config: fmt.Sprintf(`data "oci_exec_test" "skipped" {
+	  digest = "cgr.dev/chainguard/wolfi-base@%s"
+	  script = "exit 1"
+	}`, d.String()),
+		}},
+	})
 }

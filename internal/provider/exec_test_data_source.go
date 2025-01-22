@@ -142,6 +142,10 @@ func (d *ExecTestDataSource) Read(ctx context.Context, req datasource.ReadReques
 		resp.Diagnostics.AddWarning("Skipping exec tests", "Skipping exec tests as per provider configuration")
 		return
 	}
+	if os.Getenv("OCI_SKIP_EXEC_TESTS") == "true" {
+		resp.Diagnostics.AddWarning("Skipping exec tests", "Skipping exec tests as per environment variable OCI_SKIP_EXEC_TESTS")
+		return
+	}
 
 	ref, err := name.NewDigest(data.Digest.ValueString())
 	if err != nil {
