@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/v1/google"
@@ -69,7 +70,7 @@ func (p *OCIProvider) Configure(ctx context.Context, req provider.ConfigureReque
 		return
 	}
 
-	kc := authn.NewMultiKeychain(google.Keychain, authn.DefaultKeychain)
+	kc := authn.NewMultiKeychain(google.Keychain, authn.RefreshingKeychain(authn.DefaultKeychain, 30*time.Minute))
 	ropts := []remote.Option{remote.WithAuthFromKeychain(kc), remote.WithUserAgent("terraform-provider-oci")}
 
 	// These errors are impossible in current impl, but we can't return an err, so panic.
