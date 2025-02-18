@@ -70,7 +70,7 @@ func (p *OCIProvider) Configure(ctx context.Context, req provider.ConfigureReque
 	}
 
 	kc := authn.NewMultiKeychain(google.Keychain, authn.DefaultKeychain)
-	ropts := []remote.Option{remote.WithAuthFromKeychain(kc)}
+	ropts := []remote.Option{remote.WithAuthFromKeychain(kc), remote.WithUserAgent("terraform-provider-oci")}
 
 	// These errors are impossible in current impl, but we can't return an err, so panic.
 	puller, err := remote.NewPuller(ropts...)
