@@ -125,5 +125,79 @@ func TestAccStructureTestDataSource(t *testing.T) {
 			ExpectError: regexp.MustCompile(`env "NOT_SET" does not match "uh oh" \(got ""\)\n.*file "/path/not/set" not found`),
 		}},
 	})
+}
 
+func TestInvalidPathEnv(t *testing.T) {
+	repo, cleanup := ocitesting.SetupRepository(t, "test")
+	defer cleanup()
+
+	// Push an image to the local registry.
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	_ = tw.WriteHeader(&tar.Header{
+		Name: "foo",
+		Mode: 0644,
+		Size: 3,
+	})
+	_, _ = tw.Write([]byte("bar"))
+	_ = tw.WriteHeader(&tar.Header{
+		Name: "path/to/baz",
+		Mode: 0755,
+		Size: 6,
+	})
+	_, _ = tw.Write([]byte("blah!!"))
+	tw.Close()
+
+	l, err := tarball.LayerFromOpener(func() (io.ReadCloser, error) {
+		return io.NopCloser(bytes.NewBuffer(buf.Bytes())), nil
+	})
+	if err != nil {
+		t.Fatalf("failed to create layer: %v", err)
+	}
+
+	img, err := mutate.AppendLayers(empty.Image, l)
+	if err != nil {
+		t.Fatalf("failed to append layer: %v", err)
+	}
+	img, err = mutate.Config(img, v1.Config{
+		Env: []string{
+			"PATH=$PATH",
+			"LUA_PATH=baz;/whatever;$LUA_PATH",
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to mutate image: %v", err)
+	}
+	idx := mutate.AppendManifests(empty.Index, mutate.IndexAddendum{Add: img})
+	d, err := idx.Digest()
+	if err != nil {
+		t.Fatalf("failed to get index digest: %v", err)
+	}
+	ref := repo.Digest(d.String())
+	if err := remote.WriteIndex(ref, idx); err != nil {
+		t.Fatalf("failed to write index: %v", err)
+	}
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{{
+			Config: fmt.Sprintf(`data "oci_structure_test" "test" {
+	  digest = %q
+
+	  conditions {
+			env {
+				key = "PATH"
+				value = "$PATH"
+			}
+
+			env {
+				key = "LUA_PATH"
+				value = "baz;/whatever;$LUA_PATH"
+			}
+		}
+	}`, ref),
+			ExpectError: regexp.MustCompile(`env "PATH" value "\$PATH" references relative path or literal \$ string "\$PATH"\nenv "LUA_PATH" value "baz;/whatever;\$LUA_PATH" references relative path or\nliteral \$ string "baz"\nenv "LUA_PATH" value "baz;/whatever;\$LUA_PATH" references relative path or\nliteral \$ string "\$LUA_PATH"`),
+		}},
+	})
 }
