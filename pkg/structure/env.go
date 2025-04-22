@@ -1,7 +1,7 @@
 package structure
 
 // verifyEnv contains a best-effort list of PATH-esque environment variables
-// which should be evaluated for literal `$VAR` string usage
+// which should be evaluated for literal `$VAR` string usage.
 var verifyEnv = map[string]struct{}{
 	"CDC_AGENT_PATH":       {},
 	"CRI_CONFIG_PATH":      {},
