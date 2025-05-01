@@ -42,6 +42,13 @@ func (e EnvCondition) Check(i v1.Image) error {
 		if split[k] != v {
 			errs = append(errs, fmt.Errorf("env %q does not match %q (got %q)", k, v, split[k]))
 		}
+		if separator, exists := verifyEnv[k]; exists {
+			for p := range strings.SplitSeq(v, separator) {
+				if !strings.HasPrefix(p, "/") || p == fmt.Sprintf("$%s", k) {
+					errs = append(errs, fmt.Errorf("env %q value %q references relative path or literal $ string %q", k, v, p))
+				}
+			}
+		}
 	}
 	return errors.Join(errs...)
 }
