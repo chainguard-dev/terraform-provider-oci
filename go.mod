@@ -9,6 +9,7 @@ require (
 	github.com/hashicorp/terraform-plugin-go v0.26.0
 	github.com/hashicorp/terraform-plugin-log v0.9.0
 	github.com/hashicorp/terraform-plugin-testing v1.12.0
+	github.com/jonjohnsonjr/targz v0.0.0-20241113200849-4986e08f3fb4
 	github.com/spf13/cobra v1.9.1
 )
 

@@ -36,6 +36,15 @@ func TestAccStructureTestDataSource(t *testing.T) {
 		Size: 6,
 	})
 	_, _ = tw.Write([]byte("blah!!"))
+
+	// Test that /lib -> /usr/lib works.
+	_ = tw.WriteHeader(&tar.Header{
+		Name:     "symlink",
+		Typeflag: tar.TypeSymlink,
+		Mode:     0755,
+		Linkname: "path",
+	})
+
 	tw.Close()
 
 	l, err := tarball.LayerFromOpener(func() (io.ReadCloser, error) {
@@ -94,6 +103,10 @@ func TestAccStructureTestDataSource(t *testing.T) {
     }
     files {
       path  = "/path/to/baz"
+      regex = "blah!!"
+    }
+    files {
+      path  = "/symlink/to/baz"
       regex = "blah!!"
     }
   }
