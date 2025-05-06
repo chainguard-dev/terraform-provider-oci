@@ -1,16 +1,17 @@
 package structure
 
 import (
-	"archive/tar"
-	"bytes"
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
+	"os"
 	"regexp"
 	"strings"
 
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
+	"github.com/jonjohnsonjr/targz/tarfs"
 )
 
 type Condition interface {
@@ -69,7 +70,6 @@ type FilesCondition struct {
 type File struct {
 	Regex string
 	// TODO: support filemode
-	ran bool
 }
 
 func (f FilesCondition) Check(i v1.Image) error {
@@ -88,56 +88,54 @@ func (f FilesCondition) Check(i v1.Image) error {
 		rc = mutate.Extract(i)
 	}
 
-	defer rc.Close()
-	tr := tar.NewReader(rc)
-	errs := []error{}
-L:
-	for {
-		hdr, err := tr.Next()
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			return err
-		}
-		if !strings.HasPrefix(hdr.Name, "/") {
-			hdr.Name = "/" + hdr.Name
-		}
+	tmp, err := os.CreateTemp("", "structure-test")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
 
-		if _, found := f.Want[hdr.Name]; !found {
-			// We don't care about this file at all, on to the next.
+	defer rc.Close()
+
+	size, err := io.Copy(tmp, rc)
+	if err != nil {
+		return err
+	}
+
+	fsys, err := tarfs.New(tmp, size)
+	if err != nil {
+		return err
+	}
+
+	var errs []error
+
+	for path, f := range f.Want {
+		// https://pkg.go.dev/io/fs#ValidPath
+		name := strings.TrimPrefix(path, "/")
+
+		tf, err := fsys.Open(name)
+		if err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				// Avoid breaking backward compatibility.
+				errs = append(errs, fmt.Errorf("file %q not found", path))
+			} else {
+				// Any other error is unexpected, so we want to retain it.
+				errs = append(errs, fmt.Errorf("opening %q: %w", path, err))
+			}
 			continue
 		}
-		if f.Want[hdr.Name].Regex != "" {
+		if f.Regex != "" {
 			// We care about the contents, so read and buffer them and regexp.
-			var buf bytes.Buffer
-			if _, err := io.Copy(&buf, tr); err != nil {
-				return err
+			got, err := io.ReadAll(tf)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("reading %q: %w", path, err))
+				continue
 			}
-			if !regexp.MustCompile(f.Want[hdr.Name].Regex).Match(buf.Bytes()) {
-				errs = append(errs, fmt.Errorf("file %q does not match regexp %q, got:\n%s", hdr.Name, f.Want[hdr.Name].Regex, buf.String()))
-			}
-		}
-		// At least mark that we found this file we cared about.
-		f.Want[hdr.Name] = File{
-			Regex: f.Want[hdr.Name].Regex,
-			ran:   true,
-		}
 
-		// If all the checks have run, we can stop early.
-		// This might not be strictly correct, since tar files can have multiple
-		// files with the same name, and the last one wins; in practice, this is
-		// unlikely to be a problem, and the optimization is worth it.
-		for _, f := range f.Want {
-			if !f.ran {
-				continue L
+			if !regexp.MustCompile(f.Regex).Match(got) {
+				errs = append(errs, fmt.Errorf("file %q does not match regexp %q, got:\n%s", path, f.Regex, got))
 			}
 		}
-		break
 	}
-	for path, f := range f.Want {
-		if !f.ran {
-			errs = append(errs, fmt.Errorf("file %q not found", path))
-		}
-	}
+
 	return errors.Join(errs...)
 }
