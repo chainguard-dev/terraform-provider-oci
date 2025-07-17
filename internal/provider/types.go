@@ -133,5 +133,5 @@ func (c *Config) FromConfigFile(cf *v1.ConfigFile) {
 	c.WorkingDir = cf.Config.WorkingDir
 	c.Entrypoint = cf.Config.Entrypoint
 	c.Cmd = cf.Config.Cmd
-	c.CreatedAt = cf.Created.Time.Format(time.RFC3339)
+	c.CreatedAt = cf.Created.Format(time.RFC3339)
 }
