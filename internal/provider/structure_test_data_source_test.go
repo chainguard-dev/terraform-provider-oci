@@ -227,6 +227,10 @@ func TestParseFileMode(t *testing.T) {
 		{"0755", 0755},
 		{"0777", 0777},
 		{"0000", 0000},
+		{"777", 0777},
+		{"644", 0644},
+		{"75", 0075},
+		{"1", 0001},
 	}
 
 	for _, tt := range tests {
@@ -256,6 +260,20 @@ func TestParseFileMode(t *testing.T) {
 		_, err := parseFileMode("invalid")
 		if err == nil {
 			t.Error("parseFileMode(\"invalid\") did not return an error")
+		}
+	})
+
+	t.Run("invalid numerical mode", func(t *testing.T) {
+		_, err := parseFileMode("0999")
+		if err == nil {
+			t.Error("parseFileMode(\"0999\") did not return an error")
+		}
+	})
+
+	t.Run("invalid octal mode", func(t *testing.T) {
+		_, err := parseFileMode("0o777")
+		if err == nil {
+			t.Error("parseFileMode(\"0o777\") did not return an error")
 		}
 	})
 }
