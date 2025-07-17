@@ -163,7 +163,7 @@ func (d *StructureTestDataSource) Read(ctx context.Context, req datasource.ReadR
 		for _, f := range c.Files {
 			m, err := parseFileMode(f.Mode.ValueString())
 			if err != nil {
-				resp.Diagnostics.AddError("Invalid file mode", fmt.Sprintf("Unable to parse file mode %q, got error: %s", c.Files[0].Mode.ValueString(), err))
+				resp.Diagnostics.AddError("Invalid file mode", fmt.Sprintf("Unable to parse file mode %q, got error: %s", f.Mode.ValueString(), err))
 				return
 			}
 			conds = append(conds, structure.FilesCondition{Want: map[string]structure.File{
