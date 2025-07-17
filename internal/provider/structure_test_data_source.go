@@ -3,6 +3,8 @@ package provider
 import (
 	"context"
 	"fmt"
+	"os"
+	"strconv"
 
 	"github.com/chainguard-dev/terraform-provider-oci/pkg/structure"
 	"github.com/chainguard-dev/terraform-provider-oci/pkg/validators"
@@ -41,6 +43,7 @@ type StructureTestDataSourceModel struct {
 		Files []struct {
 			Path  types.String `tfsdk:"path"`
 			Regex types.String `tfsdk:"regex"`
+			Mode  types.String `tfsdk:"mode"` // Expected to be a string representation of os.FileMode
 		} `tfsdk:"files"`
 	} `tfsdk:"conditions"`
 
@@ -81,6 +84,7 @@ func (d *StructureTestDataSource) Schema(ctx context.Context, req datasource.Sch
 								AttrTypes: map[string]attr.Type{
 									"path":  basetypes.StringType{},
 									"regex": basetypes.StringType{},
+									"mode":  basetypes.StringType{}, // Expected to be a string representation of os.FileMode
 								},
 							},
 						},
@@ -116,6 +120,19 @@ func (d *StructureTestDataSource) Configure(ctx context.Context, req datasource.
 	d.popts = *popts
 }
 
+func parseFileMode(modeStr string) (*os.FileMode, error) {
+	if modeStr == "" {
+		return nil, nil
+	}
+	mode, err := strconv.ParseInt(modeStr, 8, 32)
+	if err != nil {
+		return nil, fmt.Errorf("parsing file mode %q: %w", modeStr, err)
+	}
+	umode := uint32(mode)
+	m := os.FileMode(umode) // Convert to os.FileMode
+	return &m, nil
+}
+
 func (d *StructureTestDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	var data StructureTestDataSourceModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
@@ -142,10 +159,17 @@ func (d *StructureTestDataSource) Read(ctx context.Context, req datasource.ReadR
 				e.Key.ValueString(): e.Value.ValueString(),
 			}})
 		}
+
 		for _, f := range c.Files {
+			m, err := parseFileMode(f.Mode.ValueString())
+			if err != nil {
+				resp.Diagnostics.AddError("Invalid file mode", fmt.Sprintf("Unable to parse file mode %q, got error: %s", c.Files[0].Mode.ValueString(), err))
+				return
+			}
 			conds = append(conds, structure.FilesCondition{Want: map[string]structure.File{
 				f.Path.ValueString(): {
 					Regex: f.Regex.ValueString(),
+					Mode:  m,
 				},
 			}})
 		}

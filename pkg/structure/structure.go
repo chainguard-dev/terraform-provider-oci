@@ -69,7 +69,7 @@ type FilesCondition struct {
 
 type File struct {
 	Regex string
-	// TODO: support filemode
+	Mode  *os.FileMode
 }
 
 func (f FilesCondition) Check(i v1.Image) error {
@@ -133,6 +133,16 @@ func (f FilesCondition) Check(i v1.Image) error {
 
 			if !regexp.MustCompile(f.Regex).Match(got) {
 				errs = append(errs, fmt.Errorf("file %q does not match regexp %q, got:\n%s", path, f.Regex, got))
+			}
+		}
+		if f.Mode != nil {
+			stat, err := tf.Stat()
+			if err != nil {
+				errs = append(errs, fmt.Errorf("statting %q: %w", path, err))
+				continue
+			}
+			if stat.Mode() != *f.Mode {
+				errs = append(errs, fmt.Errorf("file %q mode does not match %o (got %o)", path, *f.Mode, stat.Mode()))
 			}
 		}
 	}
