@@ -47,5 +47,6 @@ Required:
 
 Required:
 
+- `mode` (String)
 - `path` (String)
 - `regex` (String)
