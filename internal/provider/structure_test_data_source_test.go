@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"os"
 	"regexp"
 	"testing"
 
@@ -93,6 +94,7 @@ func TestAccStructureTestDataSource(t *testing.T) {
     files {
       path  = "/foo"
       regex = "bar"
+      mode  = "0644"
     }
     files {
       path = "/foo" # Just test existence.
@@ -104,6 +106,7 @@ func TestAccStructureTestDataSource(t *testing.T) {
     files {
       path  = "/path/to/baz"
       regex = "blah!!"
+	  mode  = "0755"
     }
     files {
       path  = "/symlink/to/baz"
@@ -212,5 +215,47 @@ func TestInvalidPathEnv(t *testing.T) {
 	}`, ref),
 			ExpectError: regexp.MustCompile(`env "PATH" value "\$PATH" references relative path or literal \$ string "\$PATH"\nenv "LUA_PATH" value "baz;/whatever;\$LUA_PATH" references relative path or\nliteral \$ string "baz"\nenv "LUA_PATH" value "baz;/whatever;\$LUA_PATH" references relative path or\nliteral \$ string "\$LUA_PATH"`),
 		}},
+	})
+}
+
+func TestParseFileMode(t *testing.T) {
+	tests := []struct {
+		modeStr string
+		want    os.FileMode
+	}{
+		{"0644", 0644},
+		{"0755", 0755},
+		{"0777", 0777},
+		{"0000", 0000},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.modeStr, func(t *testing.T) {
+			got, err := parseFileMode(tt.modeStr)
+			if err != nil {
+				t.Fatalf("parseFileMode(%q) returned error: %v", tt.modeStr, err)
+			}
+			if got == nil || *got != tt.want {
+				t.Errorf("parseFileMode(%q) = %v, want %v", tt.modeStr, got, tt.want)
+			}
+		})
+	}
+
+	// Test unset -> nil
+	t.Run("unset", func(t *testing.T) {
+		got, err := parseFileMode("")
+		if err != nil {
+			t.Fatalf("parseFileMode(\"\") returned error: %v", err)
+		}
+		if got != nil {
+			t.Errorf("parseFileMode(\"\") = %v, want nil", got)
+		}
+	})
+
+	t.Run("invalid mode", func(t *testing.T) {
+		_, err := parseFileMode("invalid")
+		if err == nil {
+			t.Error("parseFileMode(\"invalid\") did not return an error")
+		}
 	})
 }
