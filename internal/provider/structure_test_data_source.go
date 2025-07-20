@@ -211,7 +211,7 @@ func (d *StructureTestDataSource) Read(ctx context.Context, req datasource.ReadR
 	if err := conds.Check(img); err != nil {
 		data.TestedRef = basetypes.NewStringValue("")
 		data.Id = basetypes.NewStringValue("")
-		resp.Diagnostics.AddError("Image does not match rules", fmt.Sprintf("Image does not match rules:\n%s", err))
+		resp.Diagnostics.AddError("Image does not match rules", fmt.Sprintf("Image %s does not match rules:\n%s", data.Digest.ValueString(), err))
 		return
 	}
 
