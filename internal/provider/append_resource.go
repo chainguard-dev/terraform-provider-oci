@@ -254,7 +254,7 @@ func (r *AppendResource) doAppend(ctx context.Context, data *AppendResourceModel
 
 			if f.Contents.ValueString() != "" {
 				size = int64(len(f.Contents.ValueString()))
-				mode = 0644
+				mode = 0o644
 				datarc = io.NopCloser(strings.NewReader(f.Contents.ValueString()))
 
 			} else if f.Path.ValueString() != "" {

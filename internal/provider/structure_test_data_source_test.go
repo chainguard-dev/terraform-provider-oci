@@ -25,15 +25,107 @@ func TestAccStructureTestDataSource(t *testing.T) {
 	// Push an image to the local registry.
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
+	// File tests
 	_ = tw.WriteHeader(&tar.Header{
 		Name: "foo",
-		Mode: 0644,
+		Mode: 0o644,
 		Size: 3,
 	})
 	_, _ = tw.Write([]byte("bar"))
 	_ = tw.WriteHeader(&tar.Header{
+		Name: "path/to/bar",
+		Mode: 0o666,
+		Size: 19,
+	})
+	_, _ = tw.Write([]byte("world-writable file"))
+	_ = tw.WriteHeader(&tar.Header{
+		Name: "path/to/barexec",
+		Mode: 0o777,
+		Size: 25,
+	})
+	_, _ = tw.Write([]byte("world-writable executable"))
+	_ = tw.WriteHeader(&tar.Header{
 		Name: "path/to/baz",
-		Mode: 0755,
+		Mode: 0o755,
+		Size: 6,
+	})
+	_, _ = tw.Write([]byte("blah!!"))
+	_ = tw.WriteHeader(&tar.Header{
+		Name: "path/to/stickybit",
+		Mode: int64(0o755 | 0o1000),
+		Size: 20,
+	})
+	_, _ = tw.Write([]byte("file with sticky bit"))
+	_ = tw.WriteHeader(&tar.Header{
+		Name: "path/to/setgid",
+		Mode: int64(0o755 | 0o2000),
+		Size: 16,
+	})
+	_, _ = tw.Write([]byte("file with setgid"))
+	_ = tw.WriteHeader(&tar.Header{
+		Name: "path/to/setuid",
+		Mode: int64(0o755 | 0o4000),
+		Size: 16,
+	})
+	_, _ = tw.Write([]byte("file with setuid"))
+	_ = tw.WriteHeader(&tar.Header{
+		Name: "path/to/setuidgid",
+		Mode: int64(0o755 | 0o4000 | 0o2000),
+		Size: 27,
+	})
+	_, _ = tw.Write([]byte("file with setuid and setgid"))
+	_ = tw.WriteHeader(&tar.Header{
+		Name: "path/to/setuidgidstickybit",
+		Mode: int64(0o755 | 0o4000 | 0o2000 | 0o1000),
+		Size: 40,
+	})
+	_, _ = tw.Write([]byte("file with setuid, setgid, and sticky bit"))
+	// Directory tests
+	_ = tw.WriteHeader(&tar.Header{
+		Name:     "new_path",
+		Typeflag: tar.TypeDir,
+		Mode:     0o755,
+	})
+	_ = tw.WriteHeader(&tar.Header{
+		Name:     "new_path_permissive",
+		Typeflag: tar.TypeDir,
+		Mode:     0o777,
+	})
+	_ = tw.WriteHeader(&tar.Header{
+		Name:     "new_path_permissive/foo",
+		Typeflag: tar.TypeDir,
+		Mode:     0o777,
+	})
+	_ = tw.WriteHeader(&tar.Header{
+		Name: "new_path_permissive/foo/bar",
+		Mode: 0o777,
+		Size: 6,
+	})
+	_, _ = tw.Write([]byte("blah!!"))
+	_ = tw.WriteHeader(&tar.Header{
+		Name:     "new_path_permissive/bar",
+		Typeflag: tar.TypeDir,
+		Mode:     0o777,
+	})
+	_ = tw.WriteHeader(&tar.Header{
+		Name: "new_path_permissive/bar/baz",
+		Mode: 0o777,
+		Size: 6,
+	})
+	_, _ = tw.Write([]byte("blah!!"))
+	_ = tw.WriteHeader(&tar.Header{
+		Name:     "files_only/foo",
+		Typeflag: tar.TypeDir,
+		Mode:     0o777,
+	})
+	_ = tw.WriteHeader(&tar.Header{
+		Name:     "files_only/foo/bar",
+		Typeflag: tar.TypeDir,
+		Mode:     0o777,
+	})
+	_ = tw.WriteHeader(&tar.Header{
+		Name: "files_only/foo/baz",
+		Mode: 0o644,
 		Size: 6,
 	})
 	_, _ = tw.Write([]byte("blah!!"))
@@ -42,7 +134,7 @@ func TestAccStructureTestDataSource(t *testing.T) {
 	_ = tw.WriteHeader(&tar.Header{
 		Name:     "symlink",
 		Typeflag: tar.TypeSymlink,
-		Mode:     0755,
+		Mode:     0o755,
 		Linkname: "path",
 	})
 
@@ -106,11 +198,78 @@ func TestAccStructureTestDataSource(t *testing.T) {
     files {
       path  = "/path/to/baz"
       regex = "blah!!"
-	  mode  = "0755"
+      mode  = "0755"
+    }
+    files {
+      path  = "/path/to/bar"
+      regex = "world-writable file"
+      mode  = "0666"
+    }
+    files {
+      path  = "/path/to/barexec"
+      regex = "world-writable executable"
+      mode  = "0777"
+    }
+    files {
+      path  = "/path/to/stickybit"
+      regex = "file with sticky bit"
+      mode  = "1755"
+    }
+    files {
+      path  = "/path/to/setgid"
+      regex = "file with setgid"
+      mode  = "2755"
+    }
+    files {
+      path  = "/path/to/setuid"
+      regex = "file with setuid"
+      mode  = "4755"
+    }
+    files {
+      path  = "/path/to/setuidgid"
+      regex = "file with setuid and setgid"
+      mode  = "6755"
+    }
+    files {
+      path  = "/path/to/setuidgidstickybit"
+      regex = "file with setuid, setgid, and sticky bit"
+      mode  = "7755"
+    }
+    files {
+      path  = "/path/to/mayormaynotexist"
+      regex = "file that may exist for one image and not another"
+      mode  = "0644"
+      optional = true
+    }
+    dirs {
+      path = "/new_path"
+      mode = "0755"
+    }
+    dirs {
+      path = "/new_path_permissive"
+      mode = "0777"
+    }
+    dirs {
+      path = "/new_path_permissive"
+      mode = "0777"
+      recursive = true
+    }
+    dirs {
+      path = "/files_only/foo"
+      mode = "0644"
+      recursive = true
+      files_only = true
     }
     files {
       path  = "/symlink/to/baz"
       regex = "blah!!"
+    }
+    permissions {
+      block = "0777"
+      override = ["/new_path_permissive", "/path/to/barexec"]
+    }
+    permissions {
+      block = "0666"
     }
   }
 }`, ref),
@@ -152,13 +311,13 @@ func TestInvalidPathEnv(t *testing.T) {
 	tw := tar.NewWriter(&buf)
 	_ = tw.WriteHeader(&tar.Header{
 		Name: "foo",
-		Mode: 0644,
+		Mode: 0o644,
 		Size: 3,
 	})
 	_, _ = tw.Write([]byte("bar"))
 	_ = tw.WriteHeader(&tar.Header{
 		Name: "path/to/baz",
-		Mode: 0755,
+		Mode: 0o755,
 		Size: 6,
 	})
 	_, _ = tw.Write([]byte("blah!!"))
@@ -223,14 +382,20 @@ func TestParseFileMode(t *testing.T) {
 		modeStr string
 		want    os.FileMode
 	}{
-		{"0644", 0644},
-		{"0755", 0755},
-		{"0777", 0777},
-		{"0000", 0000},
-		{"777", 0777},
-		{"644", 0644},
-		{"75", 0075},
-		{"1", 0001},
+		{"1", 0o001},
+		{"75", 0o075},
+		{"777", 0o777},
+		{"644", 0o644},
+		{"666", 0o666},
+		{"0644", 0o644},
+		{"0755", 0o755},
+		{"0777", 0o777},
+		{"1755", 0o755 | os.ModeSticky},
+		{"2755", 0o755 | os.ModeSetgid},
+		{"4755", 0o755 | os.ModeSetuid},
+		{"6755", 0o755 | os.ModeSetuid | os.ModeSetgid},
+		{"7755", 0o755 | os.ModeSetuid | os.ModeSetgid | os.ModeSticky},
+		{"0000", 0o000},
 	}
 
 	for _, tt := range tests {

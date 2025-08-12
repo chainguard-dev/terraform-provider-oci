@@ -24,7 +24,6 @@ func main() {
 		Address: "registry.terraform.io/chainguard-dev/oci",
 		Debug:   debug,
 	})
-
 	if err != nil {
 		log.Fatal(err.Error())
 	}

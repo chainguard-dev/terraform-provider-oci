@@ -30,8 +30,21 @@ Structure test data source
 
 Required:
 
+- `dirs` (List of Object) (see [below for nested schema](#nestedobjatt--conditions--dirs))
 - `env` (List of Object) (see [below for nested schema](#nestedobjatt--conditions--env))
 - `files` (List of Object) (see [below for nested schema](#nestedobjatt--conditions--files))
+- `permissions` (List of Object) (see [below for nested schema](#nestedobjatt--conditions--permissions))
+
+<a id="nestedobjatt--conditions--dirs"></a>
+### Nested Schema for `conditions.dirs`
+
+Required:
+
+- `files_only` (Boolean)
+- `mode` (String)
+- `path` (String)
+- `recursive` (Boolean)
+
 
 <a id="nestedobjatt--conditions--env"></a>
 ### Nested Schema for `conditions.env`
@@ -48,5 +61,15 @@ Required:
 Required:
 
 - `mode` (String)
+- `optional` (Boolean)
 - `path` (String)
 - `regex` (String)
+
+
+<a id="nestedobjatt--conditions--permissions"></a>
+### Nested Schema for `conditions.permissions`
+
+Required:
+
+- `block` (String)
+- `override` (List of String)

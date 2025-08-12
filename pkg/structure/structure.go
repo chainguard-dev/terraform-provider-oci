@@ -14,6 +14,9 @@ import (
 	"github.com/jonjohnsonjr/targz/tarfs"
 )
 
+// mask out file type bits for permission comparisons (e.g., ignore directory and symlink bits).
+const permissionMask = 0o777 | os.ModeSetuid | os.ModeSetgid | os.ModeSticky
+
 type Condition interface {
 	Check(v1.Image) error
 }
@@ -68,8 +71,9 @@ type FilesCondition struct {
 }
 
 type File struct {
-	Regex string
-	Mode  *os.FileMode
+	Optional bool
+	Mode     *os.FileMode
+	Regex    string
 }
 
 func (f FilesCondition) Check(i v1.Image) error {
@@ -114,7 +118,12 @@ func (f FilesCondition) Check(i v1.Image) error {
 
 		tf, err := fsys.Open(name)
 		if err != nil {
-			if errors.Is(err, fs.ErrNotExist) {
+			// Optional files may only exist across a subset
+			// of structure test runs but we want to avoid erroring so that
+			// we can specify these conditions without having to add per-image conditions
+			if errors.Is(err, fs.ErrNotExist) && f.Optional {
+				continue
+			} else if errors.Is(err, fs.ErrNotExist) {
 				// Avoid breaking backward compatibility.
 				errs = append(errs, fmt.Errorf("file %q not found", path))
 			} else {
@@ -141,11 +150,196 @@ func (f FilesCondition) Check(i v1.Image) error {
 				errs = append(errs, fmt.Errorf("statting %q: %w", path, err))
 				continue
 			}
-			if stat.Mode() != *f.Mode {
-				errs = append(errs, fmt.Errorf("file %q mode does not match %o (got %o)", path, *f.Mode, stat.Mode()))
+
+			got := stat.Mode() & permissionMask
+			want := *f.Mode & permissionMask
+
+			if got != want {
+				errs = append(errs, fmt.Errorf("file %q mode does not match %o (got %o)", path, want, got))
 			}
 		}
 	}
 
 	return errors.Join(errs...)
+}
+
+type DirsCondition struct {
+	Want map[string]Dir
+}
+
+type Dir struct {
+	FilesOnly bool // only check file permissions within the directory [structure]
+	Mode      *os.FileMode
+	Recursive bool
+}
+
+func (d DirsCondition) Check(i v1.Image) error {
+	ls, err := i.Layers()
+	if err != nil {
+		return err
+	}
+	var rc io.ReadCloser
+	// If there's only one layer, we don't need to extract it.
+	if len(ls) == 1 {
+		rc, err = ls[0].Uncompressed()
+		if err != nil {
+			return err
+		}
+	} else {
+		rc = mutate.Extract(i)
+	}
+
+	tmp, err := os.CreateTemp("", "structure-test")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+
+	defer rc.Close()
+
+	size, err := io.Copy(tmp, rc)
+	if err != nil {
+		return err
+	}
+
+	fsys, err := tarfs.New(tmp, size)
+	if err != nil {
+		return err
+	}
+
+	var errs []error
+
+	for path, dir := range d.Want {
+		// https://pkg.go.dev/io/fs#ValidPath
+		name := strings.TrimPrefix(path, "/")
+
+		if !dir.Recursive {
+			fi, err := fsys.Stat(name)
+			if err != nil {
+				errs = append(errs, err)
+			}
+			got := fi.Mode() & permissionMask
+			want := *dir.Mode & permissionMask
+
+			// We only care about the single, top-level directory
+			if fi.IsDir() && got != want {
+				errs = append(errs, fmt.Errorf("directory %q mode does not match %o (got %o)", path, want, got))
+			}
+		} else {
+			err := fs.WalkDir(fsys, name, func(path string, d fs.DirEntry, err error) error {
+				if err != nil {
+					return err
+				}
+
+				if dir.FilesOnly && d.IsDir() {
+					return nil
+				}
+
+				fi, err := d.Info()
+				if err != nil {
+					errs = append(errs, err)
+				}
+
+				got := fi.Mode() & permissionMask
+				want := *dir.Mode & permissionMask
+
+				if got != want {
+					errs = append(errs, fmt.Errorf("file %q mode does not match %o (got %o)", path, want, got))
+				}
+
+				return nil
+			})
+			if err != nil {
+				errs = append(errs, err)
+			}
+		}
+	}
+
+	return errors.Join(errs...)
+}
+
+type PermissionsCondition struct {
+	Want map[string]Permission
+}
+
+type Permission struct {
+	Block    *os.FileMode
+	Override []string
+}
+
+func (p PermissionsCondition) Check(i v1.Image) error {
+	ls, err := i.Layers()
+	if err != nil {
+		return err
+	}
+	var rc io.ReadCloser
+	// If there's only one layer, we don't need to extract it.
+	if len(ls) == 1 {
+		rc, err = ls[0].Uncompressed()
+		if err != nil {
+			return err
+		}
+	} else {
+		rc = mutate.Extract(i)
+	}
+
+	tmp, err := os.CreateTemp("", "structure-test")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+
+	defer rc.Close()
+
+	size, err := io.Copy(tmp, rc)
+	if err != nil {
+		return err
+	}
+
+	fsys, err := tarfs.New(tmp, size)
+	if err != nil {
+		return err
+	}
+
+	var errs []error
+
+	for _, perm := range p.Want {
+		err := fs.WalkDir(fsys, ".", func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+
+			fi, err := d.Info()
+			if err != nil {
+				errs = append(errs, err)
+			}
+
+			got := fi.Mode() & permissionMask
+			block := *perm.Block & permissionMask
+
+			if got == block && !hasOverride(path, perm.Override) {
+				errs = append(errs, fmt.Errorf("file %q mode matches blocked permission %o (got %o)", path, block, got))
+			}
+
+			return nil
+		})
+		if err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	return errors.Join(errs...)
+}
+
+func hasOverride(filePath string, overrides []string) bool {
+	for _, override := range overrides {
+		// https://pkg.go.dev/io/fs#ValidPath
+		name := strings.TrimPrefix(override, "/")
+		if strings.HasPrefix(filePath, name) {
+			if filePath == name || strings.HasPrefix(filePath, name+"/") {
+				return true
+			}
+		}
+	}
+	return false
 }
