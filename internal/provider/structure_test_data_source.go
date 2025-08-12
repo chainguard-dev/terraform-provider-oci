@@ -55,6 +55,7 @@ type StructureTestDataSourceModel struct {
 		Permissions []struct {
 			Block    types.String `tfsdk:"block"` // Expected to be a string representation of os.FileMode
 			Override types.List   `tfsdk:"override"`
+			Path     types.String `tfsdk:"path"`
 		} `tfsdk:"permissions"`
 	} `tfsdk:"conditions"`
 
@@ -117,6 +118,7 @@ func (d *StructureTestDataSource) Schema(ctx context.Context, req datasource.Sch
 									"override": basetypes.ListType{
 										ElemType: basetypes.StringType{},
 									},
+									"path": basetypes.StringType{},
 								},
 							},
 						},
@@ -251,8 +253,15 @@ func (d *StructureTestDataSource) Read(ctx context.Context, req datasource.ReadR
 				resp.Diagnostics.Append(diags...)
 				return
 			}
+
+			var path string
+			if p.Path.IsNull() || p.Path.IsUnknown() {
+				path = "."
+			} else {
+				path = p.Path.ValueString()
+			}
 			conds = append(conds, structure.PermissionsCondition{Want: map[string]structure.Permission{
-				".": {
+				path: {
 					Block:    m,
 					Override: overrideStrings,
 				},

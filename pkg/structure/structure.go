@@ -303,8 +303,11 @@ func (p PermissionsCondition) Check(i v1.Image) error {
 
 	var errs []error
 
-	for _, perm := range p.Want {
-		err := fs.WalkDir(fsys, ".", func(path string, d fs.DirEntry, err error) error {
+	for path, perm := range p.Want {
+		// https://pkg.go.dev/io/fs#ValidPath
+		name := strings.TrimPrefix(path, "/")
+
+		err := fs.WalkDir(fsys, name, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return err
 			}

@@ -73,3 +73,4 @@ Required:
 
 - `block` (String)
 - `override` (List of String)
+- `path` (String)
