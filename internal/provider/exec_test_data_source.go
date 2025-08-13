@@ -238,8 +238,10 @@ func (positiveIntValidator) ValidateInt64(ctx context.Context, req validator.Int
 	}
 }
 
-var mu sync.Mutex
-var freePorts = map[int]bool{}
+var (
+	mu        sync.Mutex
+	freePorts = map[int]bool{}
+)
 
 func freePort() (int, error) {
 	mu.Lock()

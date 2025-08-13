@@ -16,8 +16,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-var _ resource.Resource = &TagResource{}
-var _ resource.ResourceWithImportState = &TagResource{}
+var (
+	_ resource.Resource                = &TagResource{}
+	_ resource.ResourceWithImportState = &TagResource{}
+)
 
 func NewTagResource() resource.Resource {
 	return &TagResource{}

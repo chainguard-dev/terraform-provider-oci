@@ -49,11 +49,11 @@ func TestAccAppendResource(t *testing.T) {
 	}
 
 	tf := filepath.Join(t.TempDir(), "test_path.txt")
-	if err := os.WriteFile(tf, []byte("hello world"), 0644); err != nil {
+	if err := os.WriteFile(tf, []byte("hello world"), 0o644); err != nil {
 		t.Fatalf("failed to write file: %v", err)
 	}
 
-	if err := os.Chmod(tf, 0755); err != nil {
+	if err := os.Chmod(tf, 0o755); err != nil {
 		t.Fatalf("failed to chmod file: %v", err)
 	}
 
@@ -199,8 +199,8 @@ func TestAccAppendResource(t *testing.T) {
 							return fmt.Errorf("expected file size %d, got %d", len("hello world"), hdr.Size)
 						}
 						// ensure the mode is preserved
-						if hdr.Mode != 0755 {
-							return fmt.Errorf("expected mode %d, got %d", 0755, hdr.Mode)
+						if hdr.Mode != 0o755 {
+							return fmt.Errorf("expected mode %d, got %d", 0o755, hdr.Mode)
 						}
 
 						// check the actual file contents are what we expect

@@ -36,15 +36,27 @@ type StructureTestDataSource struct {
 type StructureTestDataSourceModel struct {
 	Digest     types.String `tfsdk:"digest"`
 	Conditions []struct {
+		Dirs []struct {
+			FilesOnly types.Bool   `tfsdk:"files_only"`
+			Mode      types.String `tfsdk:"mode"` // Expected to be a string representation of os.FileMode
+			Path      types.String `tfsdk:"path"`
+			Recursive types.Bool   `tfsdk:"recursive"`
+		} `tfsdk:"dirs"`
 		Env []struct {
 			Key   types.String `tfsdk:"key"`
 			Value types.String `tfsdk:"value"`
 		} `tfsdk:"env"`
 		Files []struct {
-			Path  types.String `tfsdk:"path"`
-			Regex types.String `tfsdk:"regex"`
-			Mode  types.String `tfsdk:"mode"` // Expected to be a string representation of os.FileMode
+			Mode     types.String `tfsdk:"mode"` // Expected to be a string representation of os.FileMode
+			Optional types.Bool   `tfsdk:"optional"`
+			Path     types.String `tfsdk:"path"`
+			Regex    types.String `tfsdk:"regex"`
 		} `tfsdk:"files"`
+		Permissions []struct {
+			Block    types.String `tfsdk:"block"` // Expected to be a string representation of os.FileMode
+			Override types.List   `tfsdk:"override"`
+			Path     types.String `tfsdk:"path"`
+		} `tfsdk:"permissions"`
 	} `tfsdk:"conditions"`
 
 	Id        types.String `tfsdk:"id"`
@@ -71,6 +83,16 @@ func (d *StructureTestDataSource) Schema(ctx context.Context, req datasource.Sch
 				Required:            true,
 				ElementType: basetypes.ObjectType{
 					AttrTypes: map[string]attr.Type{
+						"dirs": basetypes.ListType{
+							ElemType: basetypes.ObjectType{
+								AttrTypes: map[string]attr.Type{
+									"files_only": basetypes.BoolType{},
+									"mode":       basetypes.StringType{}, // Expected to be a string representation of os.FileMode
+									"path":       basetypes.StringType{},
+									"recursive":  basetypes.BoolType{},
+								},
+							},
+						},
 						"env": basetypes.ListType{
 							ElemType: basetypes.ObjectType{
 								AttrTypes: map[string]attr.Type{
@@ -82,9 +104,21 @@ func (d *StructureTestDataSource) Schema(ctx context.Context, req datasource.Sch
 						"files": basetypes.ListType{
 							ElemType: basetypes.ObjectType{
 								AttrTypes: map[string]attr.Type{
-									"path":  basetypes.StringType{},
-									"regex": basetypes.StringType{},
-									"mode":  basetypes.StringType{}, // Expected to be a string representation of os.FileMode
+									"mode":     basetypes.StringType{}, // Expected to be a string representation of os.FileMode
+									"optional": basetypes.BoolType{},
+									"path":     basetypes.StringType{},
+									"regex":    basetypes.StringType{},
+								},
+							},
+						},
+						"permissions": basetypes.ListType{
+							ElemType: basetypes.ObjectType{
+								AttrTypes: map[string]attr.Type{
+									"block": basetypes.StringType{}, // Expected to be a string representation of os.FileMode
+									"override": basetypes.ListType{
+										ElemType: basetypes.StringType{},
+									},
+									"path": basetypes.StringType{},
 								},
 							},
 						},
@@ -124,12 +158,23 @@ func parseFileMode(modeStr string) (*os.FileMode, error) {
 	if modeStr == "" {
 		return nil, nil
 	}
-	mode, err := strconv.ParseInt(modeStr, 8, 32)
+	mode, err := strconv.ParseUint(modeStr, 8, 32)
 	if err != nil {
 		return nil, fmt.Errorf("parsing file mode %q: %w", modeStr, err)
 	}
-	umode := uint32(mode)
-	m := os.FileMode(umode) // Convert to os.FileMode
+
+	m := os.FileMode(uint32(mode) & 0o777)
+
+	if mode&0o4000 != 0 {
+		m |= os.ModeSetuid
+	}
+	if mode&0o2000 != 0 {
+		m |= os.ModeSetgid
+	}
+	if mode&0o1000 != 0 {
+		m |= os.ModeSticky
+	}
+
 	return &m, nil
 }
 
@@ -154,6 +199,27 @@ func (d *StructureTestDataSource) Read(ctx context.Context, req datasource.ReadR
 
 	var conds structure.Conditions
 	for _, c := range data.Conditions {
+
+		for _, d := range c.Dirs {
+			if d.FilesOnly.ValueBool() && !d.Recursive.ValueBool() {
+				resp.Diagnostics.AddError("Invalid input", "Can only use files_only with recursive")
+				return
+			}
+
+			m, err := parseFileMode(d.Mode.ValueString())
+			if err != nil {
+				resp.Diagnostics.AddError("Invalid file mode", fmt.Sprintf("Unable to parse file mode %q, got error: %s", d.Mode.ValueString(), err))
+				return
+			}
+			conds = append(conds, structure.DirsCondition{Want: map[string]structure.Dir{
+				d.Path.ValueString(): {
+					FilesOnly: d.FilesOnly.ValueBool(),
+					Mode:      m,
+					Recursive: d.Recursive.ValueBool(),
+				},
+			}})
+		}
+
 		for _, e := range c.Env {
 			conds = append(conds, structure.EnvCondition{Want: map[string]string{
 				e.Key.ValueString(): e.Value.ValueString(),
@@ -168,8 +234,36 @@ func (d *StructureTestDataSource) Read(ctx context.Context, req datasource.ReadR
 			}
 			conds = append(conds, structure.FilesCondition{Want: map[string]structure.File{
 				f.Path.ValueString(): {
-					Regex: f.Regex.ValueString(),
-					Mode:  m,
+					Mode:     m,
+					Optional: f.Optional.ValueBool(),
+					Regex:    f.Regex.ValueString(),
+				},
+			}})
+		}
+
+		for _, p := range c.Permissions {
+			m, err := parseFileMode(p.Block.ValueString())
+			if err != nil {
+				resp.Diagnostics.AddError("Invalid file mode", fmt.Sprintf("Unable to parse file mode %q, got error: %s", p.Block.ValueString(), err))
+				return
+			}
+			var overrideStrings []string
+			diags := p.Override.ElementsAs(ctx, &overrideStrings, false)
+			if diags.HasError() {
+				resp.Diagnostics.Append(diags...)
+				return
+			}
+
+			var path string
+			if p.Path.IsNull() || p.Path.IsUnknown() {
+				path = "."
+			} else {
+				path = p.Path.ValueString()
+			}
+			conds = append(conds, structure.PermissionsCondition{Want: map[string]structure.Permission{
+				path: {
+					Block:    m,
+					Override: overrideStrings,
 				},
 			}})
 		}
