@@ -231,6 +231,11 @@ func (d DirsCondition) Check(i v1.Image) error {
 					return err
 				}
 
+				// ignore symlinks which will register as 777
+				if d.Type()&fs.ModeSymlink == fs.ModeSymlink {
+					return nil
+				}
+
 				if dir.FilesOnly && d.IsDir() {
 					return nil
 				}
@@ -310,6 +315,11 @@ func (p PermissionsCondition) Check(i v1.Image) error {
 		err := fs.WalkDir(fsys, name, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return err
+			}
+
+			// ignore symlinks which will register as 777
+			if d.Type()&fs.ModeSymlink == fs.ModeSymlink {
+				return nil
 			}
 
 			fi, err := d.Info()
