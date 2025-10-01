@@ -188,6 +188,13 @@ func (r *TagsResource) doTags(ctx context.Context, data *TagsResourceModel) (str
 	for tag, digest := range data.Tags {
 		t := repo.Tag(tag)
 		d := repo.Digest(digest)
+
+		existingTag, err := remote.Get(t, r.popts.withContext(ctx)...)
+		if err == nil && existingTag.Digest.String() == d.DigestStr() {
+			// Tag is already in desired state, nothing to do.
+			continue
+		}
+
 		desc, err := remote.Get(d, r.popts.withContext(ctx)...)
 		if err != nil {
 			return "", fmt.Errorf("error getting digest %q: %w", digest, err)

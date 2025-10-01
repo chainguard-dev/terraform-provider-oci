@@ -178,9 +178,14 @@ func (r *TagResource) doTag(ctx context.Context, data *TagResourceModel) (string
 		return "", fmt.Errorf("digest_ref must be a digest reference: %v", err)
 	}
 	t := d.Context().Tag(data.Tag.ValueString())
-	if err != nil {
-		return "", fmt.Errorf("error parsing tag: %v", err)
+
+	existingTag, err := remote.Get(t, r.popts.withContext(ctx)...)
+	if err == nil && existingTag.Digest.String() == d.DigestStr() {
+		// Tag is already in desired state, nothing to do.
+		digest := fmt.Sprintf("%s@%s", t.Name(), existingTag.Digest.String())
+		return digest, nil
 	}
+
 	desc, err := remote.Get(d, r.popts.withContext(ctx)...)
 	if err != nil {
 		return "", fmt.Errorf("error fetching digest: %v", err)
