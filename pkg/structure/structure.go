@@ -152,6 +152,7 @@ func (f FilesCondition) Check(i v1.Image) error {
 			// To determine if a file is binary, we check for null bytes in the first 8KB.
 			if bytes.Contains(got[:min(len(got), 8192)], []byte{0}) {
 				errs = append(errs, fmt.Errorf("file %q contains binary data", path))
+				continue
 			}
 
 			if !regexp.MustCompile(f.Regex).Match(got) {
