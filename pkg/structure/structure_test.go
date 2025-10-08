@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"io"
 	"os"
 	"testing"
 
@@ -63,35 +64,36 @@ func TestFilesCondition_RegexValidation(t *testing.T) {
 	}
 }
 
-// createImageWithFile creates a test image with a single file
+// createImageWithFile creates a test image with a single file.
 func createImageWithFile(t *testing.T, path string, contents []byte, mode os.FileMode) v1.Image {
 	t.Helper()
 
-	// Create a tar archive with the file
-	var buf bytes.Buffer
-	gw := gzip.NewWriter(&buf)
-	tw := tar.NewWriter(gw)
-
-	hdr := &tar.Header{
-		Name: path[1:], // Remove leading slash for tar
-		Mode: int64(mode),
-		Size: int64(len(contents)),
-	}
-	if err := tw.WriteHeader(hdr); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := tw.Write(contents); err != nil {
-		t.Fatal(err)
-	}
-	if err := tw.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err := gw.Close(); err != nil {
-		t.Fatal(err)
-	}
-
 	// Create layer from tar archive
-	layer, err := tarball.LayerFromReader(&buf)
+	layer, err := tarball.LayerFromOpener(func() (io.ReadCloser, error) {
+		var buf bytes.Buffer
+		gw := gzip.NewWriter(&buf)
+		tw := tar.NewWriter(gw)
+
+		hdr := &tar.Header{
+			Name: path[1:], // Remove leading slash for tar
+			Mode: int64(mode),
+			Size: int64(len(contents)),
+		}
+		if err := tw.WriteHeader(hdr); err != nil {
+			return nil, err
+		}
+		if _, err := tw.Write(contents); err != nil {
+			return nil, err
+		}
+		if err := tw.Close(); err != nil {
+			return nil, err
+		}
+		if err := gw.Close(); err != nil {
+			return nil, err
+		}
+
+		return io.NopCloser(&buf), nil
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
