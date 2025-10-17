@@ -8,7 +8,36 @@ description: |-
 
 # function: parse
 
+Converts a fully qualified OCI image reference with a digest into an object representation with the following properties:
 
+- `registry` - The registry hostname (e.g., `cgr.dev`)
+- `repo` - The repository path without the registry (e.g., `chainguard/wolfi-base`)
+- `registry_repo` - The full registry and repository path (e.g., `cgr.dev/chainguard/wolfi-base`)
+- `digest` - The digest identifier (e.g., `sha256:abcd1234...`)
+- `pseudo_tag` - A pseudo tag format combining unused with the digest (e.g., `unused@sha256:abcd1234...`)
+- `ref` - The complete reference string as provided
+
+**Note:** The input must include a digest. References with only a tag (without a digest) will result in an error.
+
+## Example
+
+```terraform
+output "parsed" {
+  value = provider::oci::parse("cgr.dev/chainguard/wolfi-base@sha256:abcd1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab")
+}
+```
+
+This returns:
+```json
+{
+  "registry": "cgr.dev",
+  "repo": "chainguard/wolfi-base",
+  "registry_repo": "cgr.dev/chainguard/wolfi-base",
+  "digest": "sha256:abcd1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab",
+  "pseudo_tag": "unused@sha256:abcd1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab",
+  "ref": "cgr.dev/chainguard/wolfi-base@sha256:abcd1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab"
+}
+```
 
 
 
