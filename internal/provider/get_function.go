@@ -16,6 +16,70 @@ import (
 // Ensure provider defined types fully satisfy framework interfaces.
 var _ function.Function = &GetFunction{}
 
+const getFuncMarkdownDesc = `Fetches an OCI image or index from a registry and returns detailed information about it, including the manifest, configuration, and platform-specific images.
+
+The function accepts either a tag or digest reference and returns an object with the following properties:
+
+- ` + "`full_ref`" + ` - The complete reference with digest (e.g., ` + "`cgr.dev/chainguard/wolfi-base@sha256:abcd1234...`" + `)
+- ` + "`digest`" + ` - The digest of the image or index (e.g., ` + "`sha256:abcd1234...`" + `)
+- ` + "`tag`" + ` - The tag if one was provided in the input (e.g., ` + "`latest`" + `)
+- ` + "`manifest`" + ` - The OCI manifest object containing:
+  - ` + "`schema_version`" + ` - The manifest schema version
+  - ` + "`media_type`" + ` - The media type of the manifest
+  - ` + "`config`" + ` - The config descriptor (for images)
+  - ` + "`layers`" + ` - List of layer descriptors (for images)
+  - ` + "`annotations`" + ` - Key-value annotations
+  - ` + "`manifests`" + ` - List of manifest descriptors (for indexes)
+  - ` + "`subject`" + ` - Subject descriptor (for referrers)
+- ` + "`images`" + ` - Map of platform strings to image objects (populated for multi-arch indexes). Each image contains:
+  - ` + "`digest`" + ` - The platform-specific image digest
+  - ` + "`image_ref`" + ` - The full reference for the platform-specific image
+- ` + "`config`" + ` - The image configuration (populated for single-arch images only). Contains:
+  - ` + "`env`" + ` - List of environment variables
+  - ` + "`user`" + ` - The user to run as
+  - ` + "`working_dir`" + ` - The working directory
+  - ` + "`entrypoint`" + ` - The entrypoint command
+  - ` + "`cmd`" + ` - The default command arguments
+  - ` + "`created_at`" + ` - Timestamp when the image was created
+
+**Note:** This function makes a network request to the registry to fetch the image metadata. Authentication is handled via the default keychain (Docker config, credential helpers, etc.).
+
+## Example: Single-arch image
+
+` + "```" + `terraform
+output "image_info" {
+  value = provider::oci::get("cgr.dev/chainguard/wolfi-base:latest")
+}
+` + "```" + `
+
+## Example: Multi-arch index
+
+` + "```" + `terraform
+locals {
+  multi_arch = provider::oci::get("cgr.dev/chainguard/static:latest")
+}
+
+output "linux_amd64" {
+  value = local.multi_arch.images["linux/amd64"]
+}
+` + "```" + `
+
+## Example: Using the config
+
+` + "```" + `terraform
+locals {
+  image = provider::oci::get("cgr.dev/chainguard/wolfi-base:latest")
+}
+
+output "entrypoint" {
+  value = local.image.config.entrypoint
+}
+
+output "environment" {
+  value = local.image.config.env
+}
+` + "```"
+
 func NewGetFunction() function.Function {
 	return &GetFunction{}
 }
@@ -31,7 +95,8 @@ func (s *GetFunction) Metadata(_ context.Context, _ function.MetadataRequest, re
 // Definition should return the definition for the function.
 func (s *GetFunction) Definition(_ context.Context, _ function.DefinitionRequest, resp *function.DefinitionResponse) {
 	resp.Definition = function.Definition{
-		Summary: "Parses a pinned OCI string into its constituent parts.",
+		Summary:             "Fetches an OCI image or index from a registry and returns detailed metadata.",
+		MarkdownDescription: getFuncMarkdownDesc,
 		Parameters: []function.Parameter{
 			function.StringParameter{
 				Name:        "input",
