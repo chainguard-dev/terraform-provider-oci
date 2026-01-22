@@ -38,7 +38,7 @@ type EnvCondition struct {
 func (e EnvCondition) Check(i v1.Image) error {
 	cf, err := i.ConfigFile()
 	if err != nil {
-		return err
+		return fmt.Errorf("getting image config: %w", err)
 	}
 	var errs []error
 	split := splitEnvs(cf.Config.Env)
@@ -79,14 +79,14 @@ type File struct {
 func (f FilesCondition) Check(i v1.Image) error {
 	ls, err := i.Layers()
 	if err != nil {
-		return err
+		return fmt.Errorf("getting image layers: %w", err)
 	}
 	var rc io.ReadCloser
 	// If there's only one layer, we don't need to extract it.
 	if len(ls) == 1 {
 		rc, err = ls[0].Uncompressed()
 		if err != nil {
-			return err
+			return fmt.Errorf("getting uncompressed layer: %w", err)
 		}
 	} else {
 		rc = mutate.Extract(i)
@@ -94,7 +94,7 @@ func (f FilesCondition) Check(i v1.Image) error {
 
 	tmp, err := os.CreateTemp("", "structure-test")
 	if err != nil {
-		return err
+		return fmt.Errorf("creating temp file: %w", err)
 	}
 	defer os.Remove(tmp.Name())
 
@@ -102,12 +102,12 @@ func (f FilesCondition) Check(i v1.Image) error {
 
 	size, err := io.Copy(tmp, rc)
 	if err != nil {
-		return err
+		return fmt.Errorf("copying layer to temp file: %w", err)
 	}
 
 	fsys, err := tarfs.New(tmp, size)
 	if err != nil {
-		return err
+		return fmt.Errorf("parsing tar filesystem: %w", err)
 	}
 
 	var errs []error
@@ -176,14 +176,14 @@ type Dir struct {
 func (d DirsCondition) Check(i v1.Image) error {
 	ls, err := i.Layers()
 	if err != nil {
-		return err
+		return fmt.Errorf("getting image layers: %w", err)
 	}
 	var rc io.ReadCloser
 	// If there's only one layer, we don't need to extract it.
 	if len(ls) == 1 {
 		rc, err = ls[0].Uncompressed()
 		if err != nil {
-			return err
+			return fmt.Errorf("getting uncompressed layer: %w", err)
 		}
 	} else {
 		rc = mutate.Extract(i)
@@ -191,7 +191,7 @@ func (d DirsCondition) Check(i v1.Image) error {
 
 	tmp, err := os.CreateTemp("", "structure-test")
 	if err != nil {
-		return err
+		return fmt.Errorf("creating temp file: %w", err)
 	}
 	defer os.Remove(tmp.Name())
 
@@ -199,12 +199,12 @@ func (d DirsCondition) Check(i v1.Image) error {
 
 	size, err := io.Copy(tmp, rc)
 	if err != nil {
-		return err
+		return fmt.Errorf("copying layer to temp file: %w", err)
 	}
 
 	fsys, err := tarfs.New(tmp, size)
 	if err != nil {
-		return err
+		return fmt.Errorf("parsing tar filesystem: %w", err)
 	}
 
 	var errs []error
@@ -216,7 +216,7 @@ func (d DirsCondition) Check(i v1.Image) error {
 		if !dir.Recursive {
 			fi, err := fsys.Stat(name)
 			if err != nil {
-				errs = append(errs, err)
+				errs = append(errs, fmt.Errorf("statting directory %q: %w", path, err))
 			}
 			got := fi.Mode() & permissionMask
 			want := *dir.Mode & permissionMask
@@ -228,7 +228,7 @@ func (d DirsCondition) Check(i v1.Image) error {
 		} else {
 			err := fs.WalkDir(fsys, name, func(path string, d fs.DirEntry, err error) error {
 				if err != nil {
-					return err
+					return fmt.Errorf("walking %q: %w", path, err)
 				}
 
 				// ignore symlinks which will register as 777
@@ -242,7 +242,7 @@ func (d DirsCondition) Check(i v1.Image) error {
 
 				fi, err := d.Info()
 				if err != nil {
-					errs = append(errs, err)
+					errs = append(errs, fmt.Errorf("getting info for %q: %w", path, err))
 				}
 
 				got := fi.Mode() & permissionMask
@@ -255,7 +255,7 @@ func (d DirsCondition) Check(i v1.Image) error {
 				return nil
 			})
 			if err != nil {
-				errs = append(errs, err)
+				errs = append(errs, fmt.Errorf("walking directory %q: %w", path, err))
 			}
 		}
 	}
@@ -275,14 +275,14 @@ type Permission struct {
 func (p PermissionsCondition) Check(i v1.Image) error {
 	ls, err := i.Layers()
 	if err != nil {
-		return err
+		return fmt.Errorf("getting image layers: %w", err)
 	}
 	var rc io.ReadCloser
 	// If there's only one layer, we don't need to extract it.
 	if len(ls) == 1 {
 		rc, err = ls[0].Uncompressed()
 		if err != nil {
-			return err
+			return fmt.Errorf("getting uncompressed layer: %w", err)
 		}
 	} else {
 		rc = mutate.Extract(i)
@@ -290,7 +290,7 @@ func (p PermissionsCondition) Check(i v1.Image) error {
 
 	tmp, err := os.CreateTemp("", "structure-test")
 	if err != nil {
-		return err
+		return fmt.Errorf("creating temp file: %w", err)
 	}
 	defer os.Remove(tmp.Name())
 
@@ -298,12 +298,12 @@ func (p PermissionsCondition) Check(i v1.Image) error {
 
 	size, err := io.Copy(tmp, rc)
 	if err != nil {
-		return err
+		return fmt.Errorf("copying layer to temp file: %w", err)
 	}
 
 	fsys, err := tarfs.New(tmp, size)
 	if err != nil {
-		return err
+		return fmt.Errorf("parsing tar filesystem: %w", err)
 	}
 
 	var errs []error
@@ -314,7 +314,7 @@ func (p PermissionsCondition) Check(i v1.Image) error {
 
 		err := fs.WalkDir(fsys, name, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
-				return err
+				return fmt.Errorf("walking %q: %w", path, err)
 			}
 
 			// ignore symlinks which will register as 777
@@ -324,7 +324,7 @@ func (p PermissionsCondition) Check(i v1.Image) error {
 
 			fi, err := d.Info()
 			if err != nil {
-				errs = append(errs, err)
+				errs = append(errs, fmt.Errorf("getting info for %q: %w", path, err))
 			}
 
 			got := fi.Mode() & permissionMask
@@ -337,7 +337,7 @@ func (p PermissionsCondition) Check(i v1.Image) error {
 			return nil
 		})
 		if err != nil {
-			errs = append(errs, err)
+			errs = append(errs, fmt.Errorf("walking directory %q: %w", path, err))
 		}
 	}
 
