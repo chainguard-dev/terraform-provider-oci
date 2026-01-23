@@ -82,15 +82,35 @@ func tryExtractLayers(i v1.Image) (*tarfs.FS, func(), error) {
 }
 
 type Condition interface {
-	Check(v1.Image) error
+	Check(v1.Image, *tarfs.FS) error
 }
 
 type Conditions []Condition
 
 func (c Conditions) Check(i v1.Image) error {
+	// Check if any condition needs the filesystem
+	needsFS := false
+	for _, cond := range c {
+		if _, ok := cond.(EnvCondition); !ok {
+			needsFS = true
+			break
+		}
+	}
+
+	var fsys *tarfs.FS
+	if needsFS {
+		var cleanup func()
+		var err error
+		fsys, cleanup, err = extractLayersToTarFS(i)
+		if err != nil {
+			return fmt.Errorf("extracting layers: %w", err)
+		}
+		defer cleanup()
+	}
+
 	var errs []error
 	for _, cond := range c {
-		errs = append(errs, cond.Check(i))
+		errs = append(errs, cond.Check(i, fsys))
 	}
 	return errors.Join(errs...)
 }
@@ -99,7 +119,7 @@ type EnvCondition struct {
 	Want map[string]string
 }
 
-func (e EnvCondition) Check(i v1.Image) error {
+func (e EnvCondition) Check(i v1.Image, _ *tarfs.FS) error {
 	cf, err := i.ConfigFile()
 	if err != nil {
 		return fmt.Errorf("getting image config: %w", err)
@@ -140,13 +160,7 @@ type File struct {
 	Regex    string
 }
 
-func (f FilesCondition) Check(i v1.Image) error {
-	fsys, cleanup, err := extractLayersToTarFS(i)
-	if err != nil {
-		return fmt.Errorf("extracting layers for file check: %w", err)
-	}
-	defer cleanup()
-
+func (f FilesCondition) Check(_ v1.Image, fsys *tarfs.FS) error {
 	var errs []error
 
 	for path, f := range f.Want {
@@ -210,13 +224,7 @@ type Dir struct {
 	Recursive bool
 }
 
-func (d DirsCondition) Check(i v1.Image) error {
-	fsys, cleanup, err := extractLayersToTarFS(i)
-	if err != nil {
-		return fmt.Errorf("extracting layers for directory check: %w", err)
-	}
-	defer cleanup()
-
+func (d DirsCondition) Check(_ v1.Image, fsys *tarfs.FS) error {
 	var errs []error
 
 	for path, dir := range d.Want {
@@ -282,13 +290,7 @@ type Permission struct {
 	Override []string
 }
 
-func (p PermissionsCondition) Check(i v1.Image) error {
-	fsys, cleanup, err := extractLayersToTarFS(i)
-	if err != nil {
-		return fmt.Errorf("extracting layers for permissions check: %w", err)
-	}
-	defer cleanup()
-
+func (p PermissionsCondition) Check(_ v1.Image, fsys *tarfs.FS) error {
 	var errs []error
 
 	for path, perm := range p.Want {
