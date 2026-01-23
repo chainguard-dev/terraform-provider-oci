@@ -1,6 +1,7 @@
 package structure
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -76,6 +77,8 @@ type File struct {
 	Regex    string
 }
 
+const maxRegexFileSize = 1 * 1024 * 1024 // 1MB
+
 func (f FilesCondition) Check(i v1.Image) error {
 	ls, err := i.Layers()
 	if err != nil {
@@ -133,10 +136,22 @@ func (f FilesCondition) Check(i v1.Image) error {
 			continue
 		}
 		if f.Regex != "" {
+			if ts, err := tf.Stat(); err == nil && ts.Size() > maxRegexFileSize {
+				errs = append(errs, fmt.Errorf("file %q too large to match regex (max %d bytes)", path, maxRegexFileSize))
+				continue
+			}
+
 			// We care about the contents, so read and buffer them and regexp.
-			got, err := io.ReadAll(tf)
+			got, err := io.ReadAll(io.LimitReader(tf, maxRegexFileSize))
 			if err != nil {
 				errs = append(errs, fmt.Errorf("reading %q: %w", path, err))
+				continue
+			}
+
+			// Reject binary files, which are unlikely to match the regex.
+			// To determine if a file is binary, we check for null bytes in the first 8KB.
+			if bytes.Contains(got[:min(len(got), 8192)], []byte{0}) {
+				errs = append(errs, fmt.Errorf("file %q contains binary data", path))
 				continue
 			}
 
