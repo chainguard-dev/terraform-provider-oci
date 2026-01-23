@@ -8,6 +8,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"time"
 
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
@@ -16,6 +17,69 @@ import (
 
 // mask out file type bits for permission comparisons (e.g., ignore directory and symlink bits).
 const permissionMask = 0o777 | os.ModeSetuid | os.ModeSetgid | os.ModeSticky
+
+const (
+	maxRetries   = 3
+	retryBackoff = 1 * time.Second
+)
+
+// extractLayersToTarFS extracts the image layers to a temporary file and returns a tarfs.
+// It retries on errors like unexpected EOF.
+func extractLayersToTarFS(i v1.Image) (*tarfs.FS, func(), error) {
+	var lastErr error
+	for attempt := range maxRetries {
+		if attempt > 0 {
+			time.Sleep(retryBackoff * time.Duration(attempt))
+		}
+
+		fsys, cleanup, err := tryExtractLayers(i)
+		if err == nil {
+			return fsys, cleanup, nil
+		}
+		lastErr = err
+	}
+
+	return nil, nil, fmt.Errorf("after %d attempts: %w", maxRetries, lastErr)
+}
+
+func tryExtractLayers(i v1.Image) (*tarfs.FS, func(), error) {
+	ls, err := i.Layers()
+	if err != nil {
+		return nil, nil, fmt.Errorf("getting image layers: %w", err)
+	}
+
+	var rc io.ReadCloser
+	// If there's only one layer, we don't need to extract it.
+	if len(ls) == 1 {
+		rc, err = ls[0].Uncompressed()
+		if err != nil {
+			return nil, nil, fmt.Errorf("getting uncompressed layer: %w", err)
+		}
+	} else {
+		rc = mutate.Extract(i)
+	}
+	defer rc.Close()
+
+	tmp, err := os.CreateTemp("", "structure-test")
+	if err != nil {
+		return nil, nil, fmt.Errorf("creating temp file: %w", err)
+	}
+	cleanup := func() { os.Remove(tmp.Name()) }
+
+	size, err := io.Copy(tmp, rc)
+	if err != nil {
+		cleanup()
+		return nil, nil, fmt.Errorf("copying layer to temp file: %w", err)
+	}
+
+	fsys, err := tarfs.New(tmp, size)
+	if err != nil {
+		cleanup()
+		return nil, nil, fmt.Errorf("parsing tar filesystem: %w", err)
+	}
+
+	return fsys, cleanup, nil
+}
 
 type Condition interface {
 	Check(v1.Image) error
@@ -77,38 +141,11 @@ type File struct {
 }
 
 func (f FilesCondition) Check(i v1.Image) error {
-	ls, err := i.Layers()
+	fsys, cleanup, err := extractLayersToTarFS(i)
 	if err != nil {
-		return fmt.Errorf("getting image layers: %w", err)
+		return fmt.Errorf("extracting layers for file check: %w", err)
 	}
-	var rc io.ReadCloser
-	// If there's only one layer, we don't need to extract it.
-	if len(ls) == 1 {
-		rc, err = ls[0].Uncompressed()
-		if err != nil {
-			return fmt.Errorf("getting uncompressed layer: %w", err)
-		}
-	} else {
-		rc = mutate.Extract(i)
-	}
-
-	tmp, err := os.CreateTemp("", "structure-test")
-	if err != nil {
-		return fmt.Errorf("creating temp file: %w", err)
-	}
-	defer os.Remove(tmp.Name())
-
-	defer rc.Close()
-
-	size, err := io.Copy(tmp, rc)
-	if err != nil {
-		return fmt.Errorf("copying layer to temp file: %w", err)
-	}
-
-	fsys, err := tarfs.New(tmp, size)
-	if err != nil {
-		return fmt.Errorf("parsing tar filesystem: %w", err)
-	}
+	defer cleanup()
 
 	var errs []error
 
@@ -174,38 +211,11 @@ type Dir struct {
 }
 
 func (d DirsCondition) Check(i v1.Image) error {
-	ls, err := i.Layers()
+	fsys, cleanup, err := extractLayersToTarFS(i)
 	if err != nil {
-		return fmt.Errorf("getting image layers: %w", err)
+		return fmt.Errorf("extracting layers for directory check: %w", err)
 	}
-	var rc io.ReadCloser
-	// If there's only one layer, we don't need to extract it.
-	if len(ls) == 1 {
-		rc, err = ls[0].Uncompressed()
-		if err != nil {
-			return fmt.Errorf("getting uncompressed layer: %w", err)
-		}
-	} else {
-		rc = mutate.Extract(i)
-	}
-
-	tmp, err := os.CreateTemp("", "structure-test")
-	if err != nil {
-		return fmt.Errorf("creating temp file: %w", err)
-	}
-	defer os.Remove(tmp.Name())
-
-	defer rc.Close()
-
-	size, err := io.Copy(tmp, rc)
-	if err != nil {
-		return fmt.Errorf("copying layer to temp file: %w", err)
-	}
-
-	fsys, err := tarfs.New(tmp, size)
-	if err != nil {
-		return fmt.Errorf("parsing tar filesystem: %w", err)
-	}
+	defer cleanup()
 
 	var errs []error
 
@@ -273,38 +283,11 @@ type Permission struct {
 }
 
 func (p PermissionsCondition) Check(i v1.Image) error {
-	ls, err := i.Layers()
+	fsys, cleanup, err := extractLayersToTarFS(i)
 	if err != nil {
-		return fmt.Errorf("getting image layers: %w", err)
+		return fmt.Errorf("extracting layers for permissions check: %w", err)
 	}
-	var rc io.ReadCloser
-	// If there's only one layer, we don't need to extract it.
-	if len(ls) == 1 {
-		rc, err = ls[0].Uncompressed()
-		if err != nil {
-			return fmt.Errorf("getting uncompressed layer: %w", err)
-		}
-	} else {
-		rc = mutate.Extract(i)
-	}
-
-	tmp, err := os.CreateTemp("", "structure-test")
-	if err != nil {
-		return fmt.Errorf("creating temp file: %w", err)
-	}
-	defer os.Remove(tmp.Name())
-
-	defer rc.Close()
-
-	size, err := io.Copy(tmp, rc)
-	if err != nil {
-		return fmt.Errorf("copying layer to temp file: %w", err)
-	}
-
-	fsys, err := tarfs.New(tmp, size)
-	if err != nil {
-		return fmt.Errorf("parsing tar filesystem: %w", err)
-	}
+	defer cleanup()
 
 	var errs []error
 
