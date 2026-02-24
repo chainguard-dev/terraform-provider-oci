@@ -6,7 +6,7 @@ require (
 	github.com/google/go-containerregistry v0.21.1
 	github.com/hashicorp/terraform-plugin-docs v0.24.0
 	github.com/hashicorp/terraform-plugin-framework v1.17.0
-	github.com/hashicorp/terraform-plugin-go v0.29.0
+	github.com/hashicorp/terraform-plugin-go v0.30.0
 	github.com/hashicorp/terraform-plugin-log v0.10.0
 	github.com/hashicorp/terraform-plugin-testing v1.14.0
 	github.com/jonjohnsonjr/targz v0.0.0-20241113200849-4986e08f3fb4
@@ -14,7 +14,7 @@ require (
 )
 
 require (
-	cloud.google.com/go/compute/metadata v0.7.0 // indirect
+	cloud.google.com/go/compute/metadata v0.9.0 // indirect
 	github.com/BurntSushi/toml v1.2.1 // indirect
 	github.com/Kunde21/markdownfmt/v3 v3.1.0 // indirect
 	github.com/Masterminds/goutils v1.1.1 // indirect
@@ -94,9 +94,9 @@ require (
 	golang.org/x/text v0.34.0 // indirect
 	golang.org/x/tools v0.42.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20250707201910-8d1bb00bc6a7 // indirect
-	google.golang.org/grpc v1.75.1 // indirect
-	google.golang.org/protobuf v1.36.9 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20251202230838-ff82c1b0f217 // indirect
+	google.golang.org/grpc v1.79.1 // indirect
+	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
