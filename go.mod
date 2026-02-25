@@ -26,7 +26,7 @@ require (
 	github.com/armon/go-radix v1.0.0 // indirect
 	github.com/bgentry/speakeasy v0.1.0 // indirect
 	github.com/bmatcuk/doublestar/v4 v4.9.1 // indirect
-	github.com/cloudflare/circl v1.6.1 // indirect
+	github.com/cloudflare/circl v1.6.3 // indirect
 	github.com/containerd/stargz-snapshotter/estargz v0.18.2 // indirect
 	github.com/docker/cli v29.2.1+incompatible // indirect
 	github.com/docker/distribution v2.8.3+incompatible // indirect
