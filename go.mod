@@ -3,7 +3,7 @@ module github.com/chainguard-dev/terraform-provider-oci
 go 1.25.6
 
 require (
-	github.com/google/go-containerregistry v0.21.1
+	github.com/google/go-containerregistry v0.21.2
 	github.com/hashicorp/terraform-plugin-docs v0.24.0
 	github.com/hashicorp/terraform-plugin-framework v1.17.0
 	github.com/hashicorp/terraform-plugin-go v0.30.0
