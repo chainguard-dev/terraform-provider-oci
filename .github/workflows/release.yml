@@ -23,7 +23,7 @@ jobs:
           allowed-endpoints: >
             *.blob.core.windows.net:443
             *.githubapp.com:443
-            _pgpkey-http._tcp.keys.openpgp.org:443
+            _pgpkey-https._tcp.keys.openpgp.org:443
             api.github.com:443
             cloudresourcemanager.googleapis.com:443
             dl.google.com:443
@@ -31,7 +31,6 @@ jobs:
             go.dev:443
             goreleaser.com:443
             iamcredentials.googleapis.com:443
-            keys.openpgp.org:11371
             keys.openpgp.org:443
             metadata.google.internal:443
             objects.githubusercontent.com:443
