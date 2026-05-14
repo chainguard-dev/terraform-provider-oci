@@ -10,6 +10,7 @@ import (
 	"github.com/chainguard-dev/terraform-provider-oci/pkg/validators"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/layout"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -34,8 +35,9 @@ type StructureTestDataSource struct {
 
 // StructureTestDataSourceModel describes the data source data model.
 type StructureTestDataSourceModel struct {
-	Digest     types.String `tfsdk:"digest"`
-	Conditions []struct {
+	Digest        types.String `tfsdk:"digest"`
+	OciLayoutPath types.String `tfsdk:"oci_layout_path"`
+	Conditions    []struct {
 		Dirs []struct {
 			FilesOnly types.Bool   `tfsdk:"files_only"`
 			Mode      types.String `tfsdk:"mode"` // Expected to be a string representation of os.FileMode
@@ -77,6 +79,10 @@ func (d *StructureTestDataSource) Schema(ctx context.Context, req datasource.Sch
 				Optional:            false,
 				Required:            true,
 				Validators:          []validator.String{validators.DigestValidator{}},
+			},
+			"oci_layout_path": schema.StringAttribute{
+				MarkdownDescription: "Optional filesystem path to a local OCI image layout. When set, the test reads the image from this layout instead of pulling the digest from the registry.",
+				Optional:            true,
 			},
 			"conditions": schema.ListAttribute{
 				MarkdownDescription: "List of conditions to test",
@@ -154,6 +160,28 @@ func (d *StructureTestDataSource) Configure(ctx context.Context, req datasource.
 	d.popts = *popts
 }
 
+// imageFromLayout reads an OCI image layout from the given path and returns
+// the first image in its index. Mirrors the Manifests[0] selection used for
+// remote indexes above.
+func imageFromLayout(path string) (v1.Image, error) {
+	p, err := layout.FromPath(path)
+	if err != nil {
+		return nil, fmt.Errorf("opening layout: %w", err)
+	}
+	idx, err := p.ImageIndex()
+	if err != nil {
+		return nil, fmt.Errorf("reading layout index: %w", err)
+	}
+	im, err := idx.IndexManifest()
+	if err != nil {
+		return nil, fmt.Errorf("reading index manifest: %w", err)
+	}
+	if len(im.Manifests) == 0 {
+		return nil, fmt.Errorf("layout index is empty")
+	}
+	return idx.Image(im.Manifests[0].Digest)
+}
+
 func parseFileMode(modeStr string) (*os.FileMode, error) {
 	if modeStr == "" {
 		return nil, nil
@@ -191,10 +219,15 @@ func (d *StructureTestDataSource) Read(ctx context.Context, req datasource.ReadR
 		return
 	}
 
-	desc, err := remote.Get(ref, d.popts.withContext(ctx)...)
-	if err != nil {
-		resp.Diagnostics.AddError("Unable to fetch image", fmt.Sprintf("Unable to fetch image for ref %s, got error: %s", data.Digest.ValueString(), err))
-		return
+	useLayout := !data.OciLayoutPath.IsNull() && data.OciLayoutPath.ValueString() != ""
+
+	var desc *remote.Descriptor
+	if !useLayout {
+		desc, err = remote.Get(ref, d.popts.withContext(ctx)...)
+		if err != nil {
+			resp.Diagnostics.AddError("Unable to fetch image", fmt.Sprintf("Unable to fetch image for ref %s, got error: %s", data.Digest.ValueString(), err))
+			return
+		}
 	}
 
 	var conds structure.Conditions
@@ -271,6 +304,12 @@ func (d *StructureTestDataSource) Read(ctx context.Context, req datasource.ReadR
 
 	var img v1.Image
 	switch {
+	case useLayout:
+		img, err = imageFromLayout(data.OciLayoutPath.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddError("Unable to read image from layout", fmt.Sprintf("Unable to read image from layout %s, got error: %s", data.OciLayoutPath.ValueString(), err))
+			return
+		}
 	case desc.MediaType.IsImage():
 		img, err = desc.Image()
 		if err != nil {

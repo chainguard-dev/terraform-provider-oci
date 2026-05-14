@@ -12,6 +12,7 @@ import (
 	ocitesting "github.com/chainguard-dev/terraform-provider-oci/testing"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/empty"
+	"github.com/google/go-containerregistry/pkg/v1/layout"
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
@@ -373,6 +374,111 @@ func TestInvalidPathEnv(t *testing.T) {
 		}
 	}`, ref),
 			ExpectError: regexp.MustCompile(`env "PATH" value "\$PATH" references relative path or literal \$ string "\$PATH"\nenv "LUA_PATH" value "baz;/whatever;\$LUA_PATH" references relative path or\nliteral \$ string "baz"\nenv "LUA_PATH" value "baz;/whatever;\$LUA_PATH" references relative path or\nliteral \$ string "\$LUA_PATH"`),
+		}},
+	})
+}
+
+// buildLayoutTestImage returns a single-arch image index containing one image
+// with a known file and env, suitable for asserting structure_test conditions.
+func buildLayoutTestImage(t *testing.T) v1.ImageIndex {
+	t.Helper()
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	_ = tw.WriteHeader(&tar.Header{Name: "foo", Mode: 0o644, Size: 3})
+	_, _ = tw.Write([]byte("bar"))
+	tw.Close()
+
+	l, err := tarball.LayerFromOpener(func() (io.ReadCloser, error) {
+		return io.NopCloser(bytes.NewBuffer(buf.Bytes())), nil
+	})
+	if err != nil {
+		t.Fatalf("layer: %v", err)
+	}
+	img, err := mutate.AppendLayers(empty.Image, l)
+	if err != nil {
+		t.Fatalf("append layers: %v", err)
+	}
+	img, err = mutate.Config(img, v1.Config{Env: []string{"FOO=bar"}})
+	if err != nil {
+		t.Fatalf("config: %v", err)
+	}
+	return mutate.AppendManifests(empty.Index, mutate.IndexAddendum{Add: img})
+}
+
+// TestAccStructureTestDataSource_Layout verifies that when layout_path is set
+// the data source reads from the local OCI layout and never touches the
+// registry referenced by digest. The digest points at an unreachable host —
+// any accidental remote.Get would fail loudly.
+func TestAccStructureTestDataSource_Layout(t *testing.T) {
+	idx := buildLayoutTestImage(t)
+	dir := t.TempDir()
+	if _, err := layout.Write(dir, idx); err != nil {
+		t.Fatalf("layout.Write: %v", err)
+	}
+	d, err := idx.Digest()
+	if err != nil {
+		t.Fatalf("digest: %v", err)
+	}
+	ref := fmt.Sprintf("does-not-exist.invalid/test@%s", d.String())
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{{
+			Config: fmt.Sprintf(`data "oci_structure_test" "test" {
+  digest      = %q
+  oci_layout_path = %q
+
+  conditions {
+    env {
+      key   = "FOO"
+      value = "bar"
+    }
+    files {
+      path  = "/foo"
+      regex = "bar"
+      mode  = "0644"
+    }
+  }
+}`, ref, dir),
+			Check: resource.ComposeTestCheckFunc(
+				resource.TestCheckResourceAttr("data.oci_structure_test.test", "tested_ref", ref),
+				resource.TestCheckResourceAttr("data.oci_structure_test.test", "id", ref),
+			),
+		}},
+	})
+}
+
+// TestAccStructureTestDataSource_LayoutFailingCondition asserts that a layout
+// read with a condition the image does not satisfy yields the same
+// "does not match rules" diagnostic shape as the remote-pull path.
+func TestAccStructureTestDataSource_LayoutFailingCondition(t *testing.T) {
+	idx := buildLayoutTestImage(t)
+	dir := t.TempDir()
+	if _, err := layout.Write(dir, idx); err != nil {
+		t.Fatalf("layout.Write: %v", err)
+	}
+	d, err := idx.Digest()
+	if err != nil {
+		t.Fatalf("digest: %v", err)
+	}
+	ref := fmt.Sprintf("does-not-exist.invalid/test@%s", d.String())
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{{
+			Config: fmt.Sprintf(`data "oci_structure_test" "test" {
+  digest      = %q
+  oci_layout_path = %q
+
+  conditions {
+    files {
+      path = "/not-there"
+    }
+  }
+}`, ref, dir),
+			ExpectError: regexp.MustCompile(`does not match rules`),
 		}},
 	})
 }

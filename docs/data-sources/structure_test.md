@@ -20,6 +20,10 @@ Structure test data source
 - `conditions` (List of Object) List of conditions to test (see [below for nested schema](#nestedatt--conditions))
 - `digest` (String) Image digest to test
 
+### Optional
+
+- `oci_layout_path` (String) Optional filesystem path to a local OCI image layout. When set, the test reads the image from this layout instead of pulling the digest from the registry.
+
 ### Read-Only
 
 - `id` (String) Fully qualified image digest of the image.
