@@ -1,6 +1,6 @@
 module github.com/chainguard-dev/terraform-provider-oci
 
-go 1.26.4
+go 1.27.0
 
 require (
 	github.com/google/go-containerregistry v0.22.0
