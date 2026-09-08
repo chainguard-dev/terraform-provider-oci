@@ -272,12 +272,36 @@ func TestAccStructureTestDataSource(t *testing.T) {
     permissions {
       block = "0666"
     }
+    permissions {
+      path = "/files_only/foo"
+      block = "0777"
+      files_only = true
+    }
   }
 }`, ref),
 			Check: resource.ComposeTestCheckFunc(
 				resource.TestCheckResourceAttr("data.oci_structure_test.test", "digest", ref.String()),
 				resource.TestCheckResourceAttr("data.oci_structure_test.test", "id", ref.String()),
 			),
+		}},
+	})
+
+	// Without files_only, 0777 directories are matched by the blocked permission.
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{{
+			Config: fmt.Sprintf(`data "oci_structure_test" "test" {
+  digest = %q
+
+  conditions {
+    permissions {
+      path = "/files_only/foo"
+      block = "0777"
+    }
+  }
+}`, ref),
+			ExpectError: regexp.MustCompile(`file "files_only/foo" mode matches blocked permission 777.*\n.*file "files_only/foo/bar" mode matches blocked permission 777`),
 		}},
 	})
 

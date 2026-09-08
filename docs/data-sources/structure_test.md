@@ -76,5 +76,6 @@ Required:
 Required:
 
 - `block` (String)
+- `files_only` (Boolean)
 - `override` (List of String)
 - `path` (String)

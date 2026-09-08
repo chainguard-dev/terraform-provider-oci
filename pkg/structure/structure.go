@@ -286,8 +286,9 @@ type PermissionsCondition struct {
 }
 
 type Permission struct {
-	Block    *os.FileMode
-	Override []string
+	Block     *os.FileMode
+	Override  []string
+	FilesOnly bool // only check regular files, skipping directories
 }
 
 func (p PermissionsCondition) Check(_ v1.Image, fsys *tarfs.FS) error {
@@ -304,6 +305,10 @@ func (p PermissionsCondition) Check(_ v1.Image, fsys *tarfs.FS) error {
 
 			// ignore symlinks which will register as 777
 			if d.Type()&fs.ModeSymlink == fs.ModeSymlink {
+				return nil
+			}
+
+			if perm.FilesOnly && d.IsDir() {
 				return nil
 			}
 
