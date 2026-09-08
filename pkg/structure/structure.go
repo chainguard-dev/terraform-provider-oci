@@ -12,7 +12,6 @@ import (
 
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
-	"github.com/jonjohnsonjr/targz/tarfs"
 )
 
 // mask out file type bits for permission comparisons (e.g., ignore directory and symlink bits).
@@ -23,89 +22,93 @@ const (
 	retryBackoff = 1 * time.Second
 )
 
-// extractLayersToTarFS extracts the image layers to a temporary file and returns a tarfs.
+// layerStream returns a reader over the flattened, uncompressed filesystem of
+// the image. Single-layer images are streamed directly. Multi-layer images go
+// through mutate.Extract, which applies whiteouts.
+func layerStream(i v1.Image) (io.ReadCloser, error) {
+	ls, err := i.Layers()
+	if err != nil {
+		return nil, fmt.Errorf("getting image layers: %w", err)
+	}
+	if len(ls) == 1 {
+		rc, err := ls[0].Uncompressed()
+		if err != nil {
+			return nil, fmt.Errorf("getting uncompressed layer: %w", err)
+		}
+		return rc, nil
+	}
+	return mutate.Extract(i), nil
+}
+
+// indexImage streams the image filesystem once and builds an in-memory index
+// of it, capturing the contents of the given paths. Nothing is written to disk.
 // It retries on errors like unexpected EOF.
-func extractLayersToTarFS(i v1.Image) (*tarfs.FS, func(), error) {
+func indexImage(i v1.Image, capture map[string]bool) (*tarIndex, error) {
 	var lastErr error
 	for attempt := range maxRetries {
 		if attempt > 0 {
 			time.Sleep(retryBackoff * time.Duration(attempt))
 		}
 
-		fsys, cleanup, err := tryExtractLayers(i)
+		idx, err := tryIndexImage(i, capture)
 		if err == nil {
-			return fsys, cleanup, nil
+			return idx, nil
 		}
 		lastErr = err
 	}
 
-	return nil, nil, fmt.Errorf("after %d attempts: %w", maxRetries, lastErr)
+	return nil, fmt.Errorf("after %d attempts: %w", maxRetries, lastErr)
 }
 
-func tryExtractLayers(i v1.Image) (*tarfs.FS, func(), error) {
-	ls, err := i.Layers()
+func tryIndexImage(i v1.Image, capture map[string]bool) (*tarIndex, error) {
+	rc, err := layerStream(i)
 	if err != nil {
-		return nil, nil, fmt.Errorf("getting image layers: %w", err)
-	}
-
-	var rc io.ReadCloser
-	// If there's only one layer, we don't need to extract it.
-	if len(ls) == 1 {
-		rc, err = ls[0].Uncompressed()
-		if err != nil {
-			return nil, nil, fmt.Errorf("getting uncompressed layer: %w", err)
-		}
-	} else {
-		rc = mutate.Extract(i)
+		return nil, err
 	}
 	defer rc.Close()
 
-	tmp, err := os.CreateTemp("", "structure-test")
+	idx, err := newTarIndex(rc, capture)
 	if err != nil {
-		return nil, nil, fmt.Errorf("creating temp file: %w", err)
+		return nil, fmt.Errorf("indexing image filesystem: %w", err)
 	}
-	cleanup := func() { os.Remove(tmp.Name()) }
-
-	size, err := io.Copy(tmp, rc)
-	if err != nil {
-		cleanup()
-		return nil, nil, fmt.Errorf("copying layer to temp file: %w", err)
-	}
-
-	fsys, err := tarfs.New(tmp, size)
-	if err != nil {
-		cleanup()
-		return nil, nil, fmt.Errorf("parsing tar filesystem: %w", err)
-	}
-
-	return fsys, cleanup, nil
+	return idx, nil
 }
 
 type Condition interface {
-	Check(v1.Image, *tarfs.FS) error
+	Check(v1.Image, fs.FS) error
+}
+
+// contentCondition is implemented by conditions that need to read file
+// contents, so the contents can be captured while the image is indexed.
+type contentCondition interface {
+	ContentPaths() []string
 }
 
 type Conditions []Condition
 
 func (c Conditions) Check(i v1.Image) error {
-	// Check if any condition needs the filesystem
+	// Check if any condition needs the filesystem, and which file contents
+	// have to be captured while indexing it.
 	needsFS := false
+	capture := map[string]bool{}
 	for _, cond := range c {
 		if _, ok := cond.(EnvCondition); !ok {
 			needsFS = true
-			break
+		}
+		if cc, ok := cond.(contentCondition); ok {
+			for _, p := range cc.ContentPaths() {
+				capture[normalize(p)] = true
+			}
 		}
 	}
 
-	var fsys *tarfs.FS
+	var fsys fs.FS
 	if needsFS {
-		var cleanup func()
-		var err error
-		fsys, cleanup, err = extractLayersToTarFS(i)
+		idx, err := indexImage(i, capture)
 		if err != nil {
 			return fmt.Errorf("extracting layers: %w", err)
 		}
-		defer cleanup()
+		fsys = idx
 	}
 
 	var errs []error
@@ -119,7 +122,7 @@ type EnvCondition struct {
 	Want map[string]string
 }
 
-func (e EnvCondition) Check(i v1.Image, _ *tarfs.FS) error {
+func (e EnvCondition) Check(i v1.Image, _ fs.FS) error {
 	cf, err := i.ConfigFile()
 	if err != nil {
 		return fmt.Errorf("getting image config: %w", err)
@@ -160,7 +163,18 @@ type File struct {
 	Regex    string
 }
 
-func (f FilesCondition) Check(_ v1.Image, fsys *tarfs.FS) error {
+// ContentPaths returns the files whose contents are matched against a regex.
+func (f FilesCondition) ContentPaths() []string {
+	var paths []string
+	for p, f := range f.Want {
+		if f.Regex != "" {
+			paths = append(paths, p)
+		}
+	}
+	return paths
+}
+
+func (f FilesCondition) Check(_ v1.Image, fsys fs.FS) error {
 	var errs []error
 
 	for path, f := range f.Want {
@@ -224,7 +238,7 @@ type Dir struct {
 	Recursive bool
 }
 
-func (d DirsCondition) Check(_ v1.Image, fsys *tarfs.FS) error {
+func (d DirsCondition) Check(_ v1.Image, fsys fs.FS) error {
 	var errs []error
 
 	for path, dir := range d.Want {
@@ -232,7 +246,7 @@ func (d DirsCondition) Check(_ v1.Image, fsys *tarfs.FS) error {
 		name := strings.TrimPrefix(path, "/")
 
 		if !dir.Recursive {
-			fi, err := fsys.Stat(name)
+			fi, err := fs.Stat(fsys, name)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("statting directory %q: %w", path, err))
 			}
@@ -291,7 +305,7 @@ type Permission struct {
 	FilesOnly bool // only check regular files, skipping directories
 }
 
-func (p PermissionsCondition) Check(_ v1.Image, fsys *tarfs.FS) error {
+func (p PermissionsCondition) Check(_ v1.Image, fsys fs.FS) error {
 	var errs []error
 
 	for path, perm := range p.Want {
