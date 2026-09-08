@@ -55,9 +55,10 @@ type StructureTestDataSourceModel struct {
 			Regex    types.String `tfsdk:"regex"`
 		} `tfsdk:"files"`
 		Permissions []struct {
-			Block    types.String `tfsdk:"block"` // Expected to be a string representation of os.FileMode
-			Override types.List   `tfsdk:"override"`
-			Path     types.String `tfsdk:"path"`
+			Block     types.String `tfsdk:"block"` // Expected to be a string representation of os.FileMode
+			FilesOnly types.Bool   `tfsdk:"files_only"`
+			Override  types.List   `tfsdk:"override"`
+			Path      types.String `tfsdk:"path"`
 		} `tfsdk:"permissions"`
 	} `tfsdk:"conditions"`
 
@@ -120,7 +121,8 @@ func (d *StructureTestDataSource) Schema(ctx context.Context, req datasource.Sch
 						"permissions": basetypes.ListType{
 							ElemType: basetypes.ObjectType{
 								AttrTypes: map[string]attr.Type{
-									"block": basetypes.StringType{}, // Expected to be a string representation of os.FileMode
+									"block":      basetypes.StringType{}, // Expected to be a string representation of os.FileMode
+									"files_only": basetypes.BoolType{},
 									"override": basetypes.ListType{
 										ElemType: basetypes.StringType{},
 									},
@@ -295,8 +297,9 @@ func (d *StructureTestDataSource) Read(ctx context.Context, req datasource.ReadR
 			}
 			conds = append(conds, structure.PermissionsCondition{Want: map[string]structure.Permission{
 				path: {
-					Block:    m,
-					Override: overrideStrings,
+					Block:     m,
+					Override:  overrideStrings,
+					FilesOnly: p.FilesOnly.ValueBool(),
 				},
 			}})
 		}
