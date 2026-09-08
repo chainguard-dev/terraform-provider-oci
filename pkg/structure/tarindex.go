@@ -18,15 +18,10 @@ import (
 // entry so that metadata questions (existence, mode, type, directory listings)
 // can be answered without keeping the tar around, and it captures the contents
 // of a chosen set of paths during the single pass over the stream. Contents of
-// any other regular file can still be read on demand, at the cost of streaming
-// the tar a second time via reopen.
+// other files are not available.
 type tarIndex struct {
 	entries map[string]*tarEntry
 	dirs    map[string][]fs.DirEntry
-
-	// reopen returns a fresh reader over the same tar stream. It is only used
-	// when a caller opens a regular file whose contents were not captured.
-	reopen func() (io.ReadCloser, error)
 }
 
 type tarEntry struct {
@@ -46,11 +41,10 @@ func (e *tarEntry) Info() (fs.FileInfo, error) { return e.fi, nil }
 
 // newTarIndex consumes r to completion, indexing every header. Contents are
 // retained for entries whose normalized path is in capture.
-func newTarIndex(r io.Reader, capture map[string]bool, reopen func() (io.ReadCloser, error)) (*tarIndex, error) {
+func newTarIndex(r io.Reader, capture map[string]bool) (*tarIndex, error) {
 	idx := &tarIndex{
 		entries: map[string]*tarEntry{},
 		dirs:    map[string][]fs.DirEntry{},
-		reopen:  reopen,
 	}
 
 	tr := tar.NewReader(r)
@@ -174,49 +168,7 @@ func (idx *tarIndex) open(name string, hops int) (fs.File, error) {
 		return idx.open(path.Join(e.dir, link), hops+1)
 	}
 
-	if e.hdr.Typeflag == tar.TypeReg && !e.captured {
-		if err := idx.load(e); err != nil {
-			return nil, fmt.Errorf("opening %s: %w", name, err)
-		}
-	}
-
-	return &tarFile{fi: e.fi, r: bytes.NewReader(e.data)}, nil
-}
-
-// load streams the tar again to fetch the contents of a single entry that was
-// not captured during indexing.
-func (idx *tarIndex) load(e *tarEntry) error {
-	if idx.reopen == nil {
-		return errors.New("contents were not captured and the tar cannot be reopened")
-	}
-
-	rc, err := idx.reopen()
-	if err != nil {
-		return fmt.Errorf("reopening tar: %w", err)
-	}
-	defer rc.Close()
-
-	tr := tar.NewReader(rc)
-	for {
-		hdr, err := tr.Next()
-		if errors.Is(err, io.EOF) {
-			return fmt.Errorf("entry %q not found on reopen", e.name)
-		}
-		if err != nil {
-			return err
-		}
-		if normalize(hdr.Name) != e.name {
-			continue
-		}
-
-		data, err := io.ReadAll(tr)
-		if err != nil {
-			return fmt.Errorf("reading %q: %w", e.name, err)
-		}
-		e.captured = true
-		e.data = data
-		return nil
-	}
+	return &tarFile{fi: e.fi, r: bytes.NewReader(e.data), captured: e.captured}, nil
 }
 
 // parentDirs yields every proper ancestor of name, shortest first.
@@ -233,10 +185,19 @@ func parentDirs(name string) func(yield func(string) bool) {
 }
 
 type tarFile struct {
-	fi fs.FileInfo
-	r  *bytes.Reader
+	fi       fs.FileInfo
+	r        *bytes.Reader
+	captured bool
 }
 
 func (f *tarFile) Stat() (fs.FileInfo, error) { return f.fi, nil }
-func (f *tarFile) Read(p []byte) (int, error) { return f.r.Read(p) }
 func (f *tarFile) Close() error               { return nil }
+
+// Read returns the captured contents. Reading a regular file whose contents
+// were not requested at index time is an error rather than silently empty.
+func (f *tarFile) Read(p []byte) (int, error) {
+	if !f.captured && f.fi.Mode().IsRegular() {
+		return 0, fmt.Errorf("reading %s: contents were not captured at index time", f.fi.Name())
+	}
+	return f.r.Read(p)
+}

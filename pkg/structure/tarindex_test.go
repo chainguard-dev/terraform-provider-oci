@@ -39,13 +39,7 @@ func testTar(t *testing.T) []byte {
 
 func TestTarIndex(t *testing.T) {
 	raw := testTar(t)
-	reopens := 0
-	reopen := func() (io.ReadCloser, error) {
-		reopens++
-		return io.NopCloser(bytes.NewReader(raw)), nil
-	}
-
-	idx, err := newTarIndex(bytes.NewReader(raw), map[string]bool{"etc/os-release": true}, reopen)
+	idx, err := newTarIndex(bytes.NewReader(raw), map[string]bool{"etc/os-release": true, "etc/hosts": true, "usr/lib/libfoo.so": true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,20 +60,6 @@ func TestTarIndex(t *testing.T) {
 	// Captured content is served from memory.
 	if got := readFile("etc/os-release"); got != "PRETTY_NAME=\"Wolfi\"\n" {
 		t.Errorf("os-release = %q", got)
-	}
-	if reopens != 0 {
-		t.Errorf("captured read triggered %d reopens", reopens)
-	}
-
-	// Uncaptured content is fetched by streaming the tar again, once.
-	if got := readFile("etc/hosts"); got != "127.0.0.1 localhost\n" {
-		t.Errorf("hosts = %q", got)
-	}
-	if got := readFile("etc/hosts"); got != "127.0.0.1 localhost\n" {
-		t.Errorf("hosts (second read) = %q", got)
-	}
-	if reopens != 1 {
-		t.Errorf("uncaptured reads triggered %d reopens, want 1", reopens)
 	}
 
 	// Symlinks: relative, absolute, symlinked parent directory, hard link.
@@ -153,17 +133,21 @@ func TestTarIndex(t *testing.T) {
 	}
 }
 
-func TestTarIndexNoReopen(t *testing.T) {
+func TestTarIndexUncaptured(t *testing.T) {
 	raw := testTar(t)
-	idx, err := newTarIndex(bytes.NewReader(raw), nil, nil)
+	idx, err := newTarIndex(bytes.NewReader(raw), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := idx.Open("etc/hosts"); err == nil {
-		t.Error("open of uncaptured file without reopen succeeded, want error")
+	// Opening and statting work without contents, reading does not.
+	f, err := idx.Open("etc/hosts")
+	if err != nil {
+		t.Fatal(err)
 	}
-	// Metadata still works without any content.
-	if fi, err := idx.Stat("etc/hosts"); err != nil || fi.Mode()&permissionMask != 0o666 {
+	if fi, err := f.Stat(); err != nil || fi.Mode()&permissionMask != 0o666 {
 		t.Errorf("stat = %v, %v", fi, err)
+	}
+	if _, err := io.ReadAll(f); err == nil {
+		t.Error("read of uncaptured file succeeded, want error")
 	}
 }

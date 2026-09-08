@@ -44,15 +44,13 @@ func layerStream(i v1.Image) (io.ReadCloser, error) {
 // of it, capturing the contents of the given paths. Nothing is written to disk.
 // It retries on errors like unexpected EOF.
 func indexImage(i v1.Image, capture map[string]bool) (*tarIndex, error) {
-	reopen := func() (io.ReadCloser, error) { return layerStream(i) }
-
 	var lastErr error
 	for attempt := range maxRetries {
 		if attempt > 0 {
 			time.Sleep(retryBackoff * time.Duration(attempt))
 		}
 
-		idx, err := tryIndexImage(reopen, capture)
+		idx, err := tryIndexImage(i, capture)
 		if err == nil {
 			return idx, nil
 		}
@@ -62,14 +60,14 @@ func indexImage(i v1.Image, capture map[string]bool) (*tarIndex, error) {
 	return nil, fmt.Errorf("after %d attempts: %w", maxRetries, lastErr)
 }
 
-func tryIndexImage(reopen func() (io.ReadCloser, error), capture map[string]bool) (*tarIndex, error) {
-	rc, err := reopen()
+func tryIndexImage(i v1.Image, capture map[string]bool) (*tarIndex, error) {
+	rc, err := layerStream(i)
 	if err != nil {
 		return nil, err
 	}
 	defer rc.Close()
 
-	idx, err := newTarIndex(rc, capture, reopen)
+	idx, err := newTarIndex(rc, capture)
 	if err != nil {
 		return nil, fmt.Errorf("indexing image filesystem: %w", err)
 	}
