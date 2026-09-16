@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -18,6 +19,8 @@ const parseFuncMarkdownDesc = `Converts a fully qualified OCI image reference wi
 - ` + "`registry`" + ` - The registry hostname (e.g., ` + "`cgr.dev`" + `)
 - ` + "`repo`" + ` - The repository path without the registry (e.g., ` + "`chainguard/wolfi-base`" + `)
 - ` + "`registry_repo`" + ` - The full registry and repository path (e.g., ` + "`cgr.dev/chainguard/wolfi-base`" + `)
+- ` + "`registry_repo_prefix`" + ` - The ` + "`registry_repo`" + ` with the trailing image name segment removed (e.g., ` + "`cgr.dev/chainguard`" + `)
+- ` + "`image_name`" + ` - The last ` + "`/`" + `-separated segment of the repo (e.g., ` + "`wolfi-base`" + `)
 - ` + "`digest`" + ` - The digest identifier (e.g., ` + "`sha256:abcd1234...`" + `)
 - ` + "`pseudo_tag`" + ` - A pseudo tag format combining unused with the digest (e.g., ` + "`unused@sha256:abcd1234...`" + `)
 - ` + "`ref`" + ` - The complete reference string as provided
@@ -38,6 +41,8 @@ This returns:
   "registry": "cgr.dev",
   "repo": "chainguard/wolfi-base",
   "registry_repo": "cgr.dev/chainguard/wolfi-base",
+  "registry_repo_prefix": "cgr.dev/chainguard",
+  "image_name": "wolfi-base",
   "digest": "sha256:abcd1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab",
   "pseudo_tag": "unused@sha256:abcd1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab",
   "ref": "cgr.dev/chainguard/wolfi-base@sha256:abcd1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab"
@@ -69,12 +74,14 @@ func (s *ParseFunction) Definition(_ context.Context, _ function.DefinitionReque
 		},
 		Return: function.ObjectReturn{
 			AttributeTypes: map[string]attr.Type{
-				"registry":      basetypes.StringType{},
-				"repo":          basetypes.StringType{},
-				"registry_repo": basetypes.StringType{},
-				"digest":        basetypes.StringType{},
-				"pseudo_tag":    basetypes.StringType{},
-				"ref":           basetypes.StringType{},
+				"registry":             basetypes.StringType{},
+				"repo":                 basetypes.StringType{},
+				"registry_repo":        basetypes.StringType{},
+				"registry_repo_prefix": basetypes.StringType{},
+				"image_name":           basetypes.StringType{},
+				"digest":               basetypes.StringType{},
+				"pseudo_tag":           basetypes.StringType{},
+				"ref":                  basetypes.StringType{},
 			},
 		},
 	}
@@ -103,20 +110,33 @@ func (s *ParseFunction) Run(ctx context.Context, req function.RunRequest, resp *
 		return
 	}
 
+	registry := ref.Context().RegistryStr()
+	repo := ref.Context().RepositoryStr()
+	imageName := repo
+	registryRepoPrefix := registry
+	if i := strings.LastIndex(repo, "/"); i >= 0 {
+		imageName = repo[i+1:]
+		registryRepoPrefix = registry + "/" + repo[:i]
+	}
+
 	result := struct {
-		Registry     string `tfsdk:"registry"`
-		Repo         string `tfsdk:"repo"`
-		RegistryRepo string `tfsdk:"registry_repo"`
-		Digest       string `tfsdk:"digest"`
-		PseudoTag    string `tfsdk:"pseudo_tag"`
-		Ref          string `tfsdk:"ref"`
+		Registry           string `tfsdk:"registry"`
+		Repo               string `tfsdk:"repo"`
+		RegistryRepo       string `tfsdk:"registry_repo"`
+		RegistryRepoPrefix string `tfsdk:"registry_repo_prefix"`
+		ImageName          string `tfsdk:"image_name"`
+		Digest             string `tfsdk:"digest"`
+		PseudoTag          string `tfsdk:"pseudo_tag"`
+		Ref                string `tfsdk:"ref"`
 	}{
-		Registry:     ref.Context().RegistryStr(),
-		Repo:         ref.Context().RepositoryStr(),
-		RegistryRepo: ref.Context().RegistryStr() + "/" + ref.Context().RepositoryStr(),
-		Digest:       ref.Identifier(),
-		PseudoTag:    fmt.Sprintf("unused@%s", ref.Identifier()),
-		Ref:          ref.String(),
+		Registry:           registry,
+		Repo:               repo,
+		RegistryRepo:       registry + "/" + repo,
+		RegistryRepoPrefix: registryRepoPrefix,
+		ImageName:          imageName,
+		Digest:             ref.Identifier(),
+		PseudoTag:          fmt.Sprintf("unused@%s", ref.Identifier()),
+		Ref:                ref.String(),
 	}
 
 	resp.Error = function.ConcatFuncErrors(resp.Error, resp.Result.Set(ctx, &result))
