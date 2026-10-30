@@ -104,7 +104,7 @@ jobs:
 
       - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
-          terraform_version: "1.15.*"
+          terraform_version: "1.17.*"
           terraform_wrapper: false
 
       - run: go generate ./...
@@ -128,6 +128,8 @@ jobs:
         terraform:
           - "1.14.*"
           - "1.15.*"
+          - "1.16.*"
+          - "1.17.*"
 
     permissions:
       contents: read
@@ -222,4 +224,4 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
-          version: v2.14
+          version: v2.15
