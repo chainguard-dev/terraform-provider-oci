@@ -93,7 +93,8 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         if: steps.check.outputs.need_release == 'yes'
         with:
-          go-version-file: "go.mod"
+          go-version-file: ".go-version"
+          check-latest: true
           cache: false
 
       # This is provisioned here: https://github.com/chainguard-dev/secrets/blob/main/terraform-provider-oci.tf
