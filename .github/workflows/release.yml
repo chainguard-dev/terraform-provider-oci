@@ -7,6 +7,11 @@ on:
 
 permissions: {}
 
+# A manual dispatch overlapping the cron run would race it to create the tag.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
   release:
     name: Release
