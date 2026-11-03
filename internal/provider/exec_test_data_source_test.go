@@ -13,14 +13,12 @@ import (
 )
 
 func TestAccExecTestDataSource(t *testing.T) {
-	img, err := remote.Image(name.MustParseReference("cgr.dev/chainguard/wolfi-base:latest"))
+	// The index digest, so docker run picks the host's platform.
+	desc, err := remote.Head(name.MustParseReference("cgr.dev/chainguard/wolfi-base:latest"))
 	if err != nil {
 		t.Fatalf("failed to fetch image: %v", err)
 	}
-	d, err := img.Digest()
-	if err != nil {
-		t.Fatalf("failed to get image digest: %v", err)
-	}
+	d := desc.Digest
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -108,14 +106,12 @@ func TestAccExecTestDataSource(t *testing.T) {
 }
 
 func TestAccExecTestDataSource_FreePort(t *testing.T) {
-	img, err := remote.Image(name.MustParseReference("cgr.dev/chainguard/wolfi-base:latest"))
+	// The index digest, so docker run picks the host's platform.
+	desc, err := remote.Head(name.MustParseReference("cgr.dev/chainguard/wolfi-base:latest"))
 	if err != nil {
 		t.Fatalf("failed to fetch image: %v", err)
 	}
-	d, err := img.Digest()
-	if err != nil {
-		t.Fatalf("failed to get image digest: %v", err)
-	}
+	d := desc.Digest
 
 	// Test that we can spin up a bunch of parallel tasks that each get
 	// a unique free port, even if they don't run anything on that port.
@@ -145,14 +141,12 @@ func TestAccExecTestDataSource_FreePort(t *testing.T) {
 }
 
 func TestAccExecTestDataSource_SkipExecTests(t *testing.T) {
-	img, err := remote.Image(name.MustParseReference("cgr.dev/chainguard/wolfi-base:latest"))
+	// The index digest, so docker run picks the host's platform.
+	desc, err := remote.Head(name.MustParseReference("cgr.dev/chainguard/wolfi-base:latest"))
 	if err != nil {
 		t.Fatalf("failed to fetch image: %v", err)
 	}
-	d, err := img.Digest()
-	if err != nil {
-		t.Fatalf("failed to get image digest: %v", err)
-	}
+	d := desc.Digest
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() { testAccPreCheck(t) },
