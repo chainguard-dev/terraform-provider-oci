@@ -1,6 +1,0 @@
-# zizmor configuration - https://docs.zizmor.sh/configuration/
-# Cosmetic pedantic-persona findings suppressed at the repo level; all
-# security-relevant rules remain enabled.
-rules:
-  concurrency-limits:
-    disable: true
