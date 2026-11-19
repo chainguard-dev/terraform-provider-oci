@@ -141,7 +141,7 @@ func (s *GetFunction) Run(ctx context.Context, req function.RunRequest, resp *fu
 		remote.WithUserAgent("terraform-provider-oci"),
 		remote.WithContext(ctx))
 	if err != nil {
-		resp.Error = function.NewFuncError("Failed to " + err.Error())
+		resp.Error = function.NewFuncError(fmt.Sprintf("Failed to %v", err))
 		return
 	}
 
@@ -162,18 +162,12 @@ type refInfo struct {
 }
 
 // getRef fetches ref from its registry and describes what it resolves to.
-// Every error begins with the step that failed as a verb phrase, such as
-// "get image: ...", which callers prefix with "Failed to ".
 func getRef(ref name.Reference, opts ...remote.Option) (*refInfo, error) {
 	desc, err := remote.Get(ref, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("get image: %w", err)
 	}
-	return describe(ref, desc)
-}
 
-// describe builds the object for ref from desc, the descriptor ref resolved to.
-func describe(ref name.Reference, desc *remote.Descriptor) (*refInfo, error) {
 	info := &refInfo{
 		FullRef:  ref.Context().Digest(desc.Digest.String()).String(),
 		Digest:   desc.Digest.String(),
@@ -186,7 +180,6 @@ func describe(ref name.Reference, desc *remote.Descriptor) (*refInfo, error) {
 		return nil, fmt.Errorf("parse manifest: %w", err)
 	}
 
-	var err error
 	switch {
 	case desc.MediaType.IsIndex():
 		info.Images, err = platformImages(ref.Context(), desc)
