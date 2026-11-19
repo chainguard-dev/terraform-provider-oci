@@ -44,6 +44,8 @@ The function accepts either a tag or digest reference and returns an object with
 
 **Note:** This function makes a network request to the registry to fetch the image metadata. Authentication is handled via the default keychain (Docker config, credential helpers, etc.).
 
+Terraform calls this function again during apply and fails the run if a tag moved after plan and the result changed, so use the ` + "`oci_ref`" + ` data source for a tag that can move during a run.
+
 ## Example: Single-arch image
 
 ` + "```" + `terraform
@@ -134,76 +136,106 @@ func (s *GetFunction) Run(ctx context.Context, req function.RunRequest, resp *fu
 		return
 	}
 
-	result := struct {
-		FullRef  string           `tfsdk:"full_ref"`
-		Digest   string           `tfsdk:"digest"`
-		Tag      string           `tfsdk:"tag"`
-		Manifest *Manifest        `tfsdk:"manifest"`
-		Images   map[string]Image `tfsdk:"images"`
-		Config   *Config          `tfsdk:"config"`
-	}{}
-
-	if t, ok := ref.(name.Tag); ok {
-		result.Tag = t.TagStr()
-	}
-
-	desc, err := remote.Get(ref,
+	info, err := getRef(ref,
 		remote.WithAuthFromKeychain(authn.DefaultKeychain),
 		remote.WithUserAgent("terraform-provider-oci"),
 		remote.WithContext(ctx))
 	if err != nil {
-		resp.Error = function.NewFuncError(fmt.Sprintf("Failed to get image: %v", err))
+		resp.Error = function.NewFuncError("Failed to " + err.Error())
 		return
 	}
 
-	result.Digest = desc.Digest.String()
-	result.FullRef = ref.Context().Digest(desc.Digest.String()).String()
+	resp.Error = function.ConcatFuncErrors(resp.Error, resp.Result.Set(ctx, info))
+}
 
-	mf := &Manifest{}
-	if err := mf.FromDescriptor(desc); err != nil {
-		resp.Error = function.NewFuncError(fmt.Sprintf("Failed to parse manifest: %v", err))
-		return
+// refInfo is the object that provider::oci::get returns and the oci_ref data
+// source stores. It depends only on the reference and the digest the
+// reference resolves to, so two reads of one reference differ exactly when
+// the digest does.
+type refInfo struct {
+	FullRef  string           `tfsdk:"full_ref"`
+	Digest   string           `tfsdk:"digest"`
+	Tag      string           `tfsdk:"tag"`
+	Manifest *Manifest        `tfsdk:"manifest"`
+	Images   map[string]Image `tfsdk:"images"`
+	Config   *Config          `tfsdk:"config"`
+}
+
+// getRef fetches ref from its registry and describes what it resolves to.
+// Every error begins with the step that failed as a verb phrase, such as
+// "get image: ...", which callers prefix with "Failed to ".
+func getRef(ref name.Reference, opts ...remote.Option) (*refInfo, error) {
+	desc, err := remote.Get(ref, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("get image: %w", err)
 	}
-	result.Manifest = mf
+	return describe(ref, desc)
+}
 
-	if desc.MediaType.IsIndex() {
-		idx, err := desc.ImageIndex()
-		if err != nil {
-			resp.Error = function.NewFuncError(fmt.Sprintf("Failed to parse index: %v", err))
-			return
-		}
-		imf, err := idx.IndexManifest()
-		if err != nil {
-			resp.Error = function.NewFuncError(fmt.Sprintf("Failed to parse index manifest: %v", err))
-			return
-		}
-		result.Images = make(map[string]Image, len(imf.Manifests))
-		for _, m := range imf.Manifests {
-			if m.Platform == nil {
-				continue
-			}
-			result.Images[m.Platform.String()] = Image{
-				Digest:   m.Digest.String(),
-				ImageRef: ref.Context().Digest(m.Digest.String()).String(),
-			}
-		}
-	} else if desc.MediaType.IsImage() {
-		img, err := desc.Image()
-		if err != nil {
-			resp.Error = function.NewFuncError(fmt.Sprintf("Failed to parse image: %v", err))
-			return
-		}
-		cf, err := img.ConfigFile()
-		if err != nil {
-			resp.Error = function.NewFuncError(fmt.Sprintf("Failed to parse config: %v", err))
-			return
-		}
-		cfg := &Config{}
-		cfg.FromConfigFile(cf)
-		result.Config = cfg
+// describe builds the object for ref from desc, the descriptor ref resolved to.
+func describe(ref name.Reference, desc *remote.Descriptor) (*refInfo, error) {
+	info := &refInfo{
+		FullRef:  ref.Context().Digest(desc.Digest.String()).String(),
+		Digest:   desc.Digest.String(),
+		Manifest: &Manifest{},
+	}
+	if t, ok := ref.(name.Tag); ok {
+		info.Tag = t.TagStr()
+	}
+	if err := info.Manifest.FromDescriptor(desc); err != nil {
+		return nil, fmt.Errorf("parse manifest: %w", err)
 	}
 
-	resp.Error = function.ConcatFuncErrors(resp.Error, resp.Result.Set(ctx, &result))
+	var err error
+	switch {
+	case desc.MediaType.IsIndex():
+		info.Images, err = platformImages(ref.Context(), desc)
+	case desc.MediaType.IsImage():
+		info.Config, err = imageConfig(desc)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return info, nil
+}
+
+// platformImages maps each platform in the index desc describes to that
+// platform's image in repo.
+func platformImages(repo name.Repository, desc *remote.Descriptor) (map[string]Image, error) {
+	idx, err := desc.ImageIndex()
+	if err != nil {
+		return nil, fmt.Errorf("parse index: %w", err)
+	}
+	imf, err := idx.IndexManifest()
+	if err != nil {
+		return nil, fmt.Errorf("parse index manifest: %w", err)
+	}
+	images := make(map[string]Image, len(imf.Manifests))
+	for _, m := range imf.Manifests {
+		if m.Platform == nil {
+			continue
+		}
+		images[m.Platform.String()] = Image{
+			Digest:   m.Digest.String(),
+			ImageRef: repo.Digest(m.Digest.String()).String(),
+		}
+	}
+	return images, nil
+}
+
+// imageConfig reads the config of the image desc describes.
+func imageConfig(desc *remote.Descriptor) (*Config, error) {
+	img, err := desc.Image()
+	if err != nil {
+		return nil, fmt.Errorf("parse image: %w", err)
+	}
+	cf, err := img.ConfigFile()
+	if err != nil {
+		return nil, fmt.Errorf("parse config: %w", err)
+	}
+	cfg := &Config{}
+	cfg.FromConfigFile(cf)
+	return cfg, nil
 }
 
 var imageType = basetypes.ObjectType{

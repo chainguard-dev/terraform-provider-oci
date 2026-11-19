@@ -116,6 +116,7 @@ func (p *OCIProvider) DataSources(ctx context.Context) []func() datasource.DataS
 	return []func() datasource.DataSource{
 		NewStructureTestDataSource,
 		NewExecTestDataSource,
+		NewRefDataSource,
 	}
 }
 

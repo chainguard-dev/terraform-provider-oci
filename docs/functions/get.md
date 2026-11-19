@@ -36,6 +36,8 @@ The function accepts either a tag or digest reference and returns an object with
 
 **Note:** This function makes a network request to the registry to fetch the image metadata. Authentication is handled via the default keychain (Docker config, credential helpers, etc.).
 
+Terraform calls this function again during apply and fails the run if a tag moved after plan and the result changed, so use the `oci_ref` data source for a tag that can move during a run.
+
 ## Example: Single-arch image
 
 ```terraform
