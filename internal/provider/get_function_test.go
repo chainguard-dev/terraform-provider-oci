@@ -44,6 +44,18 @@ func TestGetFunction(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to mutate image: %v", err)
 	}
+
+	cf, err := img.ConfigFile()
+	if err != nil {
+		t.Fatalf("failed to read image config: %v", err)
+	}
+	cf.OS = "linux"
+	cf.Architecture = "arm64"
+	cf.Variant = "v8"
+	img, err = mutate.ConfigFile(img, cf)
+	if err != nil {
+		t.Fatalf("failed to set image platform: %v", err)
+	}
 	now := time.Now()
 	img, err = mutate.CreatedAt(img, v1.Time{Time: now})
 	if err != nil {
@@ -64,6 +76,15 @@ func TestGetFunction(t *testing.T) {
 			"media_type": knownvalue.StringExact(string(mt)),
 			"size":       knownvalue.NotNull(),
 			"platform":   knownvalue.Null(),
+		})
+	}
+
+	isPlatform := func(os, architecture, variant, osVersion string) knownvalue.Check {
+		return knownvalue.ObjectExact(map[string]knownvalue.Check{
+			"os":           knownvalue.StringExact(os),
+			"architecture": knownvalue.StringExact(architecture),
+			"variant":      knownvalue.StringExact(variant),
+			"os_version":   knownvalue.StringExact(osVersion),
 		})
 	}
 
@@ -98,7 +119,8 @@ func TestGetFunction(t *testing.T) {
 						"working_dir": knownvalue.StringExact("/tmp"),
 						"created_at":  knownvalue.StringExact(now.Format(time.RFC3339)),
 					}),
-					"images": knownvalue.Null(),
+					"images":    knownvalue.Null(),
+					"platforms": knownvalue.ListExact([]knownvalue.Check{isPlatform("linux", "arm64", "v8", "")}),
 				})),
 			},
 		}},
@@ -182,6 +204,10 @@ func TestGetFunction(t *testing.T) {
 						"config":      knownvalue.Null(),
 					}),
 					"config": knownvalue.Null(),
+					"platforms": knownvalue.ListExact([]knownvalue.Check{
+						isPlatform("linux", "amd64", "", ""),
+						isPlatform("windows", "arm64", "v3", "1-rc365"),
+					}),
 					"images": knownvalue.MapExact(map[string]knownvalue.Check{
 						"linux/amd64": knownvalue.ObjectExact(map[string]knownvalue.Check{
 							"digest":    knownvalue.StringRegexp(digestRE),

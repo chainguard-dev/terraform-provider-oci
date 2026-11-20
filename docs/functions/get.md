@@ -26,6 +26,7 @@ The function accepts either a tag or digest reference and returns an object with
 - `images` - Map of platform strings to image objects (populated for multi-arch indexes). Each image contains:
   - `digest` - The platform-specific image digest
   - `image_ref` - The full reference for the platform-specific image
+- `platforms` - List of declared platforms for either a single image or an index. Each platform includes OS, architecture, variant, and OS version. Entries without OS or architecture are omitted.
 - `config` - The image configuration (populated for single-arch images only). Contains:
   - `env` - List of environment variables
   - `user` - The user to run as
