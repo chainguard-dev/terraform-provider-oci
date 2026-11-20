@@ -34,6 +34,7 @@ The function accepts either a tag or digest reference and returns an object with
 - ` + "`images`" + ` - Map of platform strings to image objects (populated for multi-arch indexes). Each image contains:
   - ` + "`digest`" + ` - The platform-specific image digest
   - ` + "`image_ref`" + ` - The full reference for the platform-specific image
+- ` + "`platforms`" + ` - List of declared platforms for either a single image or an index. Each platform includes OS, architecture, variant, and OS version. Entries without OS or architecture are omitted.
 - ` + "`config`" + ` - The image configuration (populated for single-arch images only). Contains:
   - ` + "`env`" + ` - List of environment variables
   - ` + "`user`" + ` - The user to run as
@@ -105,12 +106,13 @@ func (s *GetFunction) Definition(_ context.Context, _ function.DefinitionRequest
 		},
 		Return: function.ObjectReturn{
 			AttributeTypes: map[string]attr.Type{
-				"full_ref": basetypes.StringType{},
-				"digest":   basetypes.StringType{},
-				"tag":      basetypes.StringType{},
-				"manifest": basetypes.ObjectType{AttrTypes: manifestAttribute.AttributeTypes},
-				"images":   basetypes.MapType{ElemType: imageType},
-				"config":   basetypes.ObjectType{AttrTypes: configAttribute.AttributeTypes},
+				"full_ref":  basetypes.StringType{},
+				"digest":    basetypes.StringType{},
+				"tag":       basetypes.StringType{},
+				"manifest":  basetypes.ObjectType{AttrTypes: manifestAttribute.AttributeTypes},
+				"images":    basetypes.MapType{ElemType: imageType},
+				"platforms": basetypes.ListType{ElemType: platformType},
+				"config":    basetypes.ObjectType{AttrTypes: configAttribute.AttributeTypes},
 			},
 		},
 	}
@@ -135,13 +137,14 @@ func (s *GetFunction) Run(ctx context.Context, req function.RunRequest, resp *fu
 	}
 
 	result := struct {
-		FullRef  string           `tfsdk:"full_ref"`
-		Digest   string           `tfsdk:"digest"`
-		Tag      string           `tfsdk:"tag"`
-		Manifest *Manifest        `tfsdk:"manifest"`
-		Images   map[string]Image `tfsdk:"images"`
-		Config   *Config          `tfsdk:"config"`
-	}{}
+		FullRef   string           `tfsdk:"full_ref"`
+		Digest    string           `tfsdk:"digest"`
+		Tag       string           `tfsdk:"tag"`
+		Manifest  *Manifest        `tfsdk:"manifest"`
+		Images    map[string]Image `tfsdk:"images"`
+		Config    *Config          `tfsdk:"config"`
+		Platforms []*Platform      `tfsdk:"platforms"`
+	}{Platforms: []*Platform{}}
 
 	if t, ok := ref.(name.Tag); ok {
 		result.Tag = t.TagStr()
@@ -182,6 +185,9 @@ func (s *GetFunction) Run(ctx context.Context, req function.RunRequest, resp *fu
 			if m.Platform == nil {
 				continue
 			}
+			if m.Platform.OS != "" && m.Platform.Architecture != "" {
+				result.Platforms = append(result.Platforms, ToPlatform(m.Platform))
+			}
 			result.Images[m.Platform.String()] = Image{
 				Digest:   m.Digest.String(),
 				ImageRef: ref.Context().Digest(m.Digest.String()).String(),
@@ -197,6 +203,9 @@ func (s *GetFunction) Run(ctx context.Context, req function.RunRequest, resp *fu
 		if err != nil {
 			resp.Error = function.NewFuncError(fmt.Sprintf("Failed to parse config: %v", err))
 			return
+		}
+		if p := cf.Platform(); p != nil && p.OS != "" && p.Architecture != "" {
+			result.Platforms = append(result.Platforms, ToPlatform(p))
 		}
 		cfg := &Config{}
 		cfg.FromConfigFile(cf)
@@ -237,14 +246,16 @@ var descriptorType = basetypes.ObjectType{
 		"media_type": basetypes.StringType{},
 		"size":       basetypes.NumberType{},
 		"digest":     basetypes.StringType{},
-		"platform": basetypes.ObjectType{
-			AttrTypes: map[string]attr.Type{
-				"architecture": basetypes.StringType{},
-				"os":           basetypes.StringType{},
-				"variant":      basetypes.StringType{},
-				"os_version":   basetypes.StringType{},
-			},
-		},
+		"platform":   platformType,
+	},
+}
+
+var platformType = basetypes.ObjectType{
+	AttrTypes: map[string]attr.Type{
+		"architecture": basetypes.StringType{},
+		"os":           basetypes.StringType{},
+		"variant":      basetypes.StringType{},
+		"os_version":   basetypes.StringType{},
 	},
 }
 
