@@ -31,15 +31,10 @@ func SetupRegistry(t *testing.T) (name.Registry, func()) {
 	return reg, srv.Close
 }
 
-// SetupRegistry starts a local registry for testing and returns a repository within that registry.
+// SetupRepository starts a local registry for testing and returns a repository within that registry.
 //
 // If TF_OCI_REGISTRY is set, that registry will be used instead.
 func SetupRepository(t *testing.T, repo string) (name.Repository, func()) {
 	reg, cleanup := SetupRegistry(t)
-	// TODO: use reg.Repo after https://github.com/google/go-containerregistry/pull/1671
-	r, err := name.NewRepository(reg.RegistryStr() + "/" + repo)
-	if err != nil {
-		t.Fatalf("failed to create repository: %v", err)
-	}
-	return r, cleanup
+	return reg.Repo(repo), cleanup
 }
